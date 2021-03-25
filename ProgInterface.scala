@@ -4,7 +4,6 @@ import spinal.core._
 import spinal.core.sim._
 import spinal.lib._
 import spinal.lib.fsm._
-import XlinxS6BB._
 
 import java.rmi.registry.Registry
 import scala.util.control.Breaks
@@ -66,8 +65,8 @@ class ProgrammingInterface() extends Component {
 /***-Blocks-***/
 
     val baudgen = True//BaudRateGen(57600);
-    val uart_tx = new uart_tx6("uart_tx6")
-    val uart_rx = new uart_rx6("uart_rx6")
+    val uart_tx = new uart_tx()
+    val uart_rx = new uart_rx()
 
     val hex2value = new Hex2Value()
 
