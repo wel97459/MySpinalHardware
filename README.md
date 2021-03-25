@@ -1,3 +1,1 @@
-# MyHardware
-
-Components for SpinalHDL
+Hardware components for SpinalHDL projects
