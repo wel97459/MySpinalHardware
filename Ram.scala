@@ -4,7 +4,7 @@ import java.nio.file.{Files, Paths}
 
 import spinal.core._
 
-class RamTest(File: String, AddrDepth: Int = 8) extends Component {
+class Ram(File: String, AddrDepth: Int = 8) extends Component {
     val io = new Bundle {
         val ena     = in  Bool
         val wea     = in  Bits(1 bit)
