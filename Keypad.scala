@@ -12,8 +12,8 @@ class Keypad extends Component {
 
         val KeyOut = out Bool()
 
-        val KeypadIn = in Bits (4 bits)
-        val KeypadOut = out Bits (4 bits)
+        val KeypadCol = in Bits (4 bits)
+        val KeypadRow = out Bits (4 bits)
     }
 
     val Key = Reg(Bits(4 bits)) init (0)
@@ -21,19 +21,19 @@ class Keypad extends Component {
         Key := io.Key
     }
 
-    io.KeypadOut(0) := (Key === 0x1 || Key === 0x2 || Key === 0x3 || Key === 0xC)
-    io.KeypadOut(1) := (Key === 0x4 || Key === 0x5 || Key === 0x6 || Key === 0xD)
-    io.KeypadOut(2) := (Key === 0x7 || Key === 0x8 || Key === 0x9 || Key === 0xE)
-    io.KeypadOut(3) := (Key === 0xA || Key === 0x0 || Key === 0xB || Key === 0xF)
+    io.KeypadRow(0) := (Key === 0x1 || Key === 0x2 || Key === 0x3 || Key === 0xC)
+    io.KeypadRow(1) := (Key === 0x4 || Key === 0x5 || Key === 0x6 || Key === 0xD)
+    io.KeypadRow(2) := (Key === 0x7 || Key === 0x8 || Key === 0x9 || Key === 0xE)
+    io.KeypadRow(3) := (Key === 0xA || Key === 0x0 || Key === 0xB || Key === 0xF)
 
     when(Key === 0x1 || Key === 0x4 || Key === 0x7 || Key === 0xA){
-        io.KeyOut := io.KeypadIn(0)
+        io.KeyOut := io.KeypadCol(0)
     }elsewhen(Key === 0x2 || Key === 0x5 || Key === 0x8 || Key === 0x0){
-        io.KeyOut := io.KeypadIn(1)
+        io.KeyOut := io.KeypadCol(1)
     }elsewhen(Key === 0x3 || Key === 0x6 || Key === 0x9 || Key === 0xB) {
-        io.KeyOut := io.KeypadIn(2)
+        io.KeyOut := io.KeypadCol(2)
     }elsewhen(Key === 0xC || Key === 0xD || Key === 0xE || Key === 0xF) {
-        io.KeyOut := io.KeypadIn(3)
+        io.KeyOut := io.KeypadCol(3)
     }otherwise(io.KeyOut := False)
 }
 
@@ -50,7 +50,7 @@ object Keypad_Test {
 
             var c = 0;
             dut.io.Key #= 0xc
-            dut.io.KeypadIn #= 0x0
+            dut.io.KeypadCol #= 0x0
 
             val loop = new Breaks;
             loop.breakable {
@@ -61,7 +61,7 @@ object Keypad_Test {
                     } else dut.io.LatchKey #= false
 
                     if(c == 20){
-                        dut.io.KeypadIn #= 0x8
+                        dut.io.KeypadCol #= 0x8
                     }
 
 
