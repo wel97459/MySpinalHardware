@@ -12,9 +12,9 @@ object Pow2 {
 
 
 object CounterUpDownSet {
-    def apply(stateCount: BigInt): CounterUpDownSet = new CounterUpDownSet(stateCount)
-    def apply(stateCount: BigInt, incWhen: Bool, decWhen : Bool): CounterUpDownSet = {
-    val counter = CounterUpDownSet(stateCount)
+    def apply(maxCount: BigInt): CounterUpDownSet = new CounterUpDownSet(maxCount)
+    def apply(maxCount: BigInt, incWhen: Bool, decWhen : Bool): CounterUpDownSet = {
+    val counter = CounterUpDownSet(maxCount)
     when(incWhen) {
         counter.increment()
         }
@@ -26,12 +26,12 @@ object CounterUpDownSet {
 //  implicit def implicitValue(c: Counter) = c.value
 }
 
-class CounterUpDownSet(val stateCount: BigInt) extends ImplicitArea[UInt]
+class CounterUpDownSet(val maxCount: BigInt) extends ImplicitArea[UInt]
 {
     val incrementIt = False
     val decrementIt = False
     val setIt = False
-    val newValue = UInt(log2Up(stateCount) bit)
+    val newValue = UInt(log2Up(maxCount) bit)
 
     newValue := 0
     def increment(): Unit = incrementIt := True
@@ -46,12 +46,12 @@ class CounterUpDownSet(val stateCount: BigInt) extends ImplicitArea[UInt]
     def !==(that: UInt): Bool = this.value =/= that
     def =/=(that: UInt): Bool = this.value =/= that
 
-    val valueNext = UInt(log2Up(stateCount) bit)
+    val valueNext = UInt(log2Up(maxCount) bit)
     val value = RegNext(valueNext) init(0)
-    val willOverflowIfInc = value === stateCount - 1 && !decrementIt
+    val willOverflowIfInc = value === maxCount - 1 && !decrementIt
     val willOverflow = willOverflowIfInc && incrementIt
 
-    val finalIncrement = UInt(log2Up(stateCount) bit)
+    val finalIncrement = UInt(log2Up(maxCount) bit)
     when(incrementIt && !decrementIt){
         finalIncrement := 1
     }elsewhen(!incrementIt && decrementIt){
@@ -63,10 +63,10 @@ class CounterUpDownSet(val stateCount: BigInt) extends ImplicitArea[UInt]
     when(setIt){
         valueNext := newValue
     }otherwise{
-        if (isPow2(stateCount)) {
+        if (isPow2(maxCount)) {
             valueNext := (value + finalIncrement).resized
         } else {
-            assert(false,"CounterUpDownSet Need to be power of 2 and is: "+ stateCount)
+            assert(false,"CounterUpDownSet Need to be power of 2 and is: "+ maxCount)
         }
     }
 
@@ -79,7 +79,7 @@ object CounterSet {
     require(range.step == 1)
     CounterSet(start = range.low, end = range.high)
   }
-  def apply(stateCount: BigInt): CounterSet = new CounterSet(start = 0, end = stateCount-1)
+  def apply(maxCount: BigInt): CounterSet = new CounterSet(start = 0, end = maxCount-1)
   def apply(bitCount: BitCount): CounterSet = new CounterSet(start = 0, end = (BigInt(1)<<bitCount.value)-1)
 
   def apply(start: BigInt,end: BigInt, inc: Bool) : CounterSet  = {
@@ -94,7 +94,7 @@ object CounterSet {
     CounterSet(start = range.low, end = range.high,inc = inc)
   }
 
-  def apply(stateCount: BigInt, inc: Bool): CounterSet = CounterSet(start = 0, end = stateCount-1,inc = inc)
+  def apply(maxCount: BigInt, inc: Bool): CounterSet = CounterSet(start = 0, end = maxCount-1,inc = inc)
   def apply(bitCount: BitCount, inc: Bool): CounterSet = CounterSet(start = 0, end = (BigInt(1)<<bitCount.value)-1,inc = inc)
 }
 
