@@ -1,4 +1,4 @@
-package MySpinalHardware
+package MyHardware
 
 import spinal.core._
 import spinal.lib._
@@ -7,7 +7,7 @@ import spinal.lib.fsm._
 import spinal.core.sim._
 import scala.util.control.Breaks
 
-class SPI extends Component{
+class mySPI extends Component{
     val io = new Bundle
     {
         val output = slave Stream(Bits(9 bits))
@@ -133,7 +133,7 @@ class SPI extends Component{
 object SPI_Test {
     def main(args: Array[String]) {
         SimConfig.withWave.compile{
-            val dut = new SPI()
+            val dut = new mySPI()
             dut
         }.doSim { dut =>
             //Fork a process to generate the reset and the clock on the dut
