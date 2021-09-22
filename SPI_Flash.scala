@@ -58,7 +58,7 @@ class SPI_Flash extends Component{
             }
         }
 
-        val WakeUpDelay: State = new StateDelay(40) { //4 us
+        val WakeUpDelay: State = new StateDelay(4 us) { //4 us
             whenCompleted {
                 goto(Wait)
             }
