@@ -6,7 +6,7 @@ import spinal.core._
 
 class Ram(File: String, AddrDepth: Int = 8) extends Component {
     val io = new Bundle {
-        val ena     = in  Bool
+        val ena     = in  Bool()
         val wea     = in  Bits(1 bit)
         val addra   = in Bits(AddrDepth bit)
         val douta   = out Bits(8 bit)

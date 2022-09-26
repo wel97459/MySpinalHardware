@@ -5,7 +5,7 @@ import spinal.lib._
 
 class LedGlow(val depth: Int = 24) extends Component {
     val io = new Bundle {
-        val led = out Bool
+        val led = out Bool()
     }
 
     val cnt = Reg(UInt(depth bits)) init(0)

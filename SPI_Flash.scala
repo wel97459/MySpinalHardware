@@ -13,19 +13,19 @@ class SPI_Flash extends Component{
     {
         val c = in Bits(16 bits)
 
-        val startRead = in Bool
+        val startRead = in Bool()
         val address = in Bits(24 bits)
 
         val output = master Stream(Bits(8 bits))
 
-        val wake = in Bool
+        val wake = in Bool()
 
         val SPI = new Bundle
         {
-            val SCLK = out Bool
-            val CS = out Bool
-            val MOSI = out Bool
-            val MISO = in Bool
+            val SCLK = out Bool()
+            val CS = out Bool()
+            val MOSI = out Bool()
+            val MISO = in Bool()
         }
     }
     

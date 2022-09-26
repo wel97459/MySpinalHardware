@@ -21,8 +21,8 @@ class ProgrammingInterface() extends Component {
 //        val RX_Data = in Bits(8 bit)
         val FlagIn = in Bits(8 bit)
         val FlagOut = out Bits(8 bit)
-        val UartTX = out Bool
-        val UartRX = in Bool
+        val UartTX = out Bool()
+        val UartRX = in Bool()
     }
 
 /***-Defines-***/    
@@ -122,7 +122,7 @@ class ProgrammingInterface() extends Component {
         /***-Registers-***/
         val StartMSGPointer = CounterSet(StartMSGList.length)
         val StartMSGChar = StartMSG_Rom(StartMSGPointer)
-        val lastState = Reg(this.enumDefinition())
+        val lastState = Reg(this.enumDef())
 
         /***-FMS-***/
         val Reset: State = new StateDelay(10) with EntryPoint {
@@ -452,7 +452,7 @@ object ProgrammingInterface_Test {
                         }
                     }
 
-                    if(t >= 1000) loop.break;
+                    if(t >= 9000) loop.break;
                     t+=1
                     dut.clockDomain.waitRisingEdge()
                 }

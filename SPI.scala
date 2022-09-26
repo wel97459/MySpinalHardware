@@ -11,21 +11,21 @@ class mySPI extends Component{
     val io = new Bundle
     {
         val output = slave Stream(Bits(9 bits))
-        val output_full = out Bool
+        val output_full = out Bool()
         val input = master Stream(Bits(8 bits))
-        val input_full = out Bool
+        val input_full = out Bool()
 
-        val holdOpen = in Bool
-        val sending = out Bool
+        val holdOpen = in Bool()
+        val sending = out Bool()
 
         val c = in Bits(16 bits)
 
         val SPI = new Bundle
         {
-            val SCLK = out Bool
-            val CS = out Bool
-            val MOSI = out Bool
-            val MISO = in Bool
+            val SCLK = out Bool()
+            val CS = out Bool()
+            val MOSI = out Bool()
+            val MISO = in Bool()
         }
     }
 

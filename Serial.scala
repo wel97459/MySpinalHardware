@@ -6,14 +6,14 @@ import spinal.lib.com.uart._
 
 class uart_rx extends Component {
     val io = new Bundle {
-        val buffer_reset = in Bool
-        val serial_in = in Bool
-        val en_16_x_baud = in Bool
-        val buffer_read = in Bool
+        val buffer_reset = in Bool()
+        val serial_in = in Bool()
+        val en_16_x_baud = in Bool()
+        val buffer_read = in Bool()
 
-        val buffer_data_present = out Bool
-        val buffer_half_full = out Bool
-        val buffer_full = out Bool
+        val buffer_data_present = out Bool()
+        val buffer_half_full = out Bool()
+        val buffer_full = out Bool()
         val data_out = out Bits(8 bits)
     }
 
@@ -44,15 +44,15 @@ class uart_rx extends Component {
 
 class uart_tx extends Component {
     val io = new Bundle {
-        val buffer_reset = in Bool
+        val buffer_reset = in Bool()
         val data_in = in Bits(8 bits)
-        val en_16_x_baud = in Bool
-        val buffer_write = in Bool
+        val en_16_x_baud = in Bool()
+        val buffer_write = in Bool()
 
-        val serial_out= out Bool
-        val buffer_data_present = out Bool
-        val buffer_half_full = out Bool
-        val buffer_full = out Bool
+        val serial_out= out Bool()
+        val buffer_data_present = out Bool()
+        val buffer_half_full = out Bool()
+        val buffer_full = out Bool()
     }
 
     val g = UartCtrlGenerics()
@@ -73,7 +73,8 @@ class uart_tx extends Component {
     uartCtrlTx.io.configFrame.stop := UartStopType.ONE
     uartCtrlTx.io.samplingTick := clockDivider.tick
     uartCtrlTx.io.txd <> io.serial_out
-
+    uartCtrlTx.io.break := False
+    uartCtrlTx.io.cts := False
     val write = Stream(Bits(8 bits))
     write.valid := io.buffer_write
     write.payload := io.data_in
