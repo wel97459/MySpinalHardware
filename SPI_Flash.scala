@@ -1,4 +1,4 @@
-package MyHardware
+package MySpinalHardware
 
 import spinal.core._
 import spinal.lib._
@@ -19,7 +19,6 @@ class SPI_Flash extends Component{
         val output = master Stream(Bits(8 bits))
 
         val wake = in Bool()
-
         val SPI = new Bundle
         {
             val SCLK = out Bool()
@@ -39,6 +38,7 @@ class SPI_Flash extends Component{
 
     val holdOpen = Reg(Bool) init(False)
     spi.io.holdOpen := holdOpen
+    val address = Reg(Bits(24 bits))
 
     val timer = new Timeout(4)
     val fsm = new StateMachine {
@@ -73,6 +73,7 @@ class SPI_Flash extends Component{
                 } elsewhen(io.startRead && !holdOpen) {
                     spi.io.output.payload := 0x00B
                     spi.io.output.valid := True
+                    address := io.address
                     holdOpen := True
                     goto(Address23_16)
                 }
@@ -81,7 +82,7 @@ class SPI_Flash extends Component{
 
         val Address23_16: State = new State {
            whenIsActive {
-                spi.io.output.payload := B"0" ## io.address(23 downto 16)
+                spi.io.output.payload := B"0" ## address(23 downto 16)
                 spi.io.output.valid := True
                 goto(Address15_8)
            }
@@ -89,7 +90,7 @@ class SPI_Flash extends Component{
 
         val Address15_8: State = new State {
            whenIsActive {
-                spi.io.output.payload := B"0" ## io.address(15 downto 8)
+                spi.io.output.payload := B"0" ## address(15 downto 8)
                 spi.io.output.valid := True
                 goto(Address7_0)
            }
@@ -97,7 +98,7 @@ class SPI_Flash extends Component{
 
         val Address7_0: State = new State {
            whenIsActive {
-                spi.io.output.payload := B"0" ## io.address(7 downto 0)
+                spi.io.output.payload := B"0" ## address(7 downto 0)
                 spi.io.output.valid := True
                 goto(SendBlank)
            }
@@ -130,7 +131,7 @@ class SPI_Flash extends Component{
                     holdOpen := False
                     goto(Wait)
                 }elsewhen(!spi.io.input_full){
-                    spi.io.output.payload := 0x100
+                    spi.io.output.payload := 0x1FF
                     spi.io.output.valid := True
                     goto(Wait4DoneSending)
                 }

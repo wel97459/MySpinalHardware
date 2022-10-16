@@ -1,10 +1,19 @@
-package MyHardware
+package MySpinalHardware
 
 import java.nio.file.{Files, Paths}
 
 import spinal.core._
 
-class Ram(File: String, AddrDepth: Int = 8) extends Component {
+ /* returns max value for number of bit
+ */
+object max_bits {
+  def apply(value: Int): Int = {
+    if (value < 0) SpinalError(s"No negative value ($value) on ${this.getClass.getSimpleName}")
+    ((0x1 << value) - 1)
+  }
+}
+
+class RamInit(File: String, AddrDepth: Int = 8) extends Component {
     val io = new Bundle {
         val ena     = in  Bool()
         val wea     = in  Bits(1 bit)
@@ -20,6 +29,31 @@ class Ram(File: String, AddrDepth: Int = 8) extends Component {
 
     mem.write(
         enable = io.ena & io.wea.asBool,
+        address = io.addra.asUInt,
+        data = io.dina
+    )
+
+    io.douta := mem.readSync(
+        enable = io.ena,
+        address = io.addra.asUInt
+    )
+}
+
+class Ram(AddrDepth: Int = 8) extends Component {
+    val io = new Bundle {
+        val ena     = in  Bool()
+        val wea     = in  Bool()
+        val addra   = in Bits(AddrDepth bit)
+        val douta   = out Bits(8 bit)
+        val dina    = in Bits(8 bit)
+    }
+
+    def MemRom(Depth: Int) = new Mem(Bits(8 bit), max_bits(Depth))
+
+    val mem = MemRom(AddrDepth)
+
+    mem.write(
+        enable = io.ena & io.wea,
         address = io.addra.asUInt,
         data = io.dina
     )
