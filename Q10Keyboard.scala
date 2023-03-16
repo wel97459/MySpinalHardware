@@ -60,6 +60,48 @@ class Q10Keyboard extends Component{
         val Init: State = new State with EntryPoint
         {
             whenIsActive{
+                dataIn := 0x02 //Configuration register
+                deviceAddr := 0x1f
+                writeAmount := 2
+                readAmount := 0
+                goto(LoadConfiguration)
+            }
+        }
+        val LoadConfiguration: State = new State
+        {
+            whenIsActive{
+                i2c_m.io.i_stream.valid := True
+                dataIn := 0xD2 //CFG_OVERFLOW_INT | CFG_KEY_INT | CFG_USE_MODS | CFG_REPORT_MODS
+                goto(SendConfiguration)
+            }
+        }
+
+        val SendConfiguration: State = new State
+        {
+            whenIsActive{
+                i2c_m.io.i_stream.valid := True
+                goto(StartConf)
+            }
+        }
+        val StartConf: State = new State
+        {
+            whenIsActive{
+                i2c_m.io.i_start := True
+                goto(WaitConf)
+            }
+        }
+
+        val WaitConf: State = new State
+        {
+            whenIsActive{
+                when(!i2c_m.io.o_busy){
+                    goto(Timeout)
+                } 
+            }
+        }
+        val GetFifo: State = new State
+        {
+            whenIsActive{
                 dataIn := 0x09 //FIFO access register
                 deviceAddr := 0x1f
                 writeAmount := 1
@@ -75,6 +117,7 @@ class Q10Keyboard extends Component{
                 goto(Start)
             }
         }
+
 
         val Start: State = new State
         {
@@ -125,7 +168,7 @@ class Q10Keyboard extends Component{
 
         val Timeout: State = new StateDelay(100 us){
             whenCompleted{
-                goto(Init)
+                goto(GetFifo)
             }
         }
     }
