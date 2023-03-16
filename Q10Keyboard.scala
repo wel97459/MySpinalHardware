@@ -13,6 +13,7 @@ class Q10Keyboard extends Component{
 
 		val i_scl = in Bool()
 		val i_sda = in Bool()
+        val i_hold = in Bool()
 
         val key_code_stream = master Stream (Bits(8 bits))
     }
@@ -64,7 +65,9 @@ class Q10Keyboard extends Component{
                 deviceAddr := 0x1f
                 writeAmount := 2
                 readAmount := 0
-                goto(LoadConfiguration)
+                when(!io.i_hold){
+                    goto(LoadConfiguration)
+                }
             }
         }
         val LoadConfiguration: State = new State
