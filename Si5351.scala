@@ -12,6 +12,8 @@ class Si5351(File: String) extends Component{
 
 		val i_scl = in Bool()
 		val i_sda = in Bool()
+        val i_skip = in Bool()
+        val i_prog = in Bool()
 
         val o_done = out Bool()
         val o_error = out Bool()
@@ -53,8 +55,12 @@ class Si5351(File: String) extends Component{
             whenIsActive{
                 romAddr := 0
                 dataIn := romAddr.asBits
-                i2c.io.i_send := True
-                goto(LoadConfiguration)
+                when(io.i_skip){
+                    goto(Done)
+                }otherwise{
+                    i2c.io.i_send := True
+                    goto(LoadConfiguration)
+                }
             }
         }
 
@@ -91,7 +97,10 @@ class Si5351(File: String) extends Component{
         {
             whenIsActive{
                 i2c.io.i_end := True
-                io.o_done := True;
+                io.o_done := True
+                when(io.i_prog){
+                    goto(Init)
+                }
             }
         }
     }
@@ -115,6 +124,7 @@ object Si5351_Sim {
 			var last_sda = true
             dut.io.i_sda #= true
             dut.io.i_scl #= true
+            dut.io.i_skip #= false 
 			dut.clockDomain.forkStimulus(period = 10)
 
 			for(idx <- 0 to 30000){
@@ -127,6 +137,12 @@ object Si5351_Sim {
                     }else{
                         bitcounter=1
                     }
+                }
+
+                if(idx > 21175 && idx <= 21275){
+                    dut.clockDomain.assertReset()
+                }else{
+                    dut.clockDomain.deassertReset()
                 }
 
                 if(bitcounter==9){
