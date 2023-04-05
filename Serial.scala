@@ -19,27 +19,26 @@ class uart_rx extends Component {
 
     val g = UartCtrlGenerics()
 
-    val clockDivider = new Area {
-      val counter = Reg(UInt(g.clockDividerWidth bits)) init(0)
-      val tick = counter === 0
-
-      counter := counter - 1
-      when(tick) {
-        counter := (ClockDomain.current.frequency.getValue / 115200 / g.rxSamplePerBit).toInt
-      }
-    }
-
     val uartCtrlRx = new UartCtrlRx(g)
     uartCtrlRx.io.configFrame.dataLength := 7  //8 bits
     uartCtrlRx.io.configFrame.parity := UartParityType.NONE
     uartCtrlRx.io.configFrame.stop := UartStopType.ONE
-    uartCtrlRx.io.samplingTick := clockDivider.tick
+    uartCtrlRx.io.samplingTick := io.en_16_x_baud
     uartCtrlRx.io.rxd <> io.serial_in
 
-    io.buffer_data_present := uartCtrlRx.io.read.valid
-    io.buffer_half_full := False
-    io.buffer_full := False
-    io.data_out := uartCtrlRx.io.read.payload
+    val streamOut = Stream(Bits(8 bits))
+    val rxFifo = StreamFifo(
+      dataType = Bits(8 bits),
+      depth    = 16
+    )
+    rxFifo.io.push << uartCtrlRx.io.read
+    rxFifo.io.pop  >> streamOut
+
+    streamOut.ready := io.buffer_read
+    io.buffer_data_present := streamOut.valid
+    io.data_out := streamOut.payload
+    io.buffer_half_full :=rxFifo.io.availability < 8
+    io.buffer_full := rxFifo.io.availability < 2
 }
 
 class uart_tx extends Component {
@@ -50,37 +49,32 @@ class uart_tx extends Component {
         val buffer_write = in Bool()
 
         val serial_out= out Bool()
-        val buffer_data_present = out Bool()
         val buffer_half_full = out Bool()
         val buffer_full = out Bool()
     }
 
     val g = UartCtrlGenerics()
 
-    val clockDivider = new Area {
-      val counter = Reg(UInt(g.clockDividerWidth bits)) init(0)
-      val tick = counter === 0
-
-      counter := counter - 1
-      when(tick) {
-        counter := (ClockDomain.current.frequency.getValue / 115200 / g.rxSamplePerBit).toInt
-      }
-    }
-
     val uartCtrlTx = new UartCtrlTx(g)
     uartCtrlTx.io.configFrame.dataLength := 7  //8 bits
     uartCtrlTx.io.configFrame.parity := UartParityType.NONE
     uartCtrlTx.io.configFrame.stop := UartStopType.ONE
-    uartCtrlTx.io.samplingTick := clockDivider.tick
+    uartCtrlTx.io.samplingTick := io.en_16_x_baud
     uartCtrlTx.io.txd <> io.serial_out
     uartCtrlTx.io.break := False
     uartCtrlTx.io.cts := False
-    val write = Stream(Bits(8 bits))
-    write.valid := io.buffer_write
-    write.payload := io.data_in
-    write >-> uartCtrlTx.io.write
 
-    io.buffer_data_present := False
-    io.buffer_half_full := False
-    io.buffer_full := False
+    val streamIn= Stream(Bits(8 bits))
+    val txFifo = StreamFifo(
+      dataType = Bits(8 bits),
+      depth    = 16
+    )
+    txFifo.io.push << streamIn
+    txFifo.io.pop  >> uartCtrlTx.io.write
+
+    streamIn.valid := io.buffer_write
+    streamIn.payload := io.data_in
+
+    io.buffer_half_full :=txFifo.io.availability < 8
+    io.buffer_full := txFifo.io.availability < 2
 }

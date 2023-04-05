@@ -7,8 +7,25 @@ import spinal.lib.fsm._
 
 import java.rmi.registry.Registry
 import scala.util.control.Breaks
+class BaudRateGen(Baud: BigInt) extends Component {
+    val io = new Bundle
+    {
+        val tick = out Bool()
+    }
+      val counter = CounterFreeRun((ClockDomain.current.frequency.getValue / Baud.toInt / 8).toInt)
 
-class ProgrammingInterface() extends Component {
+      val tick = Reg(Bool()) init(False)
+
+      when(counter.willOverflowIfInc) {
+        tick := True
+      }otherwise{
+        tick := False
+      }
+      io.tick := tick
+
+
+}
+class ProgrammingInterface(Baud: BigInt) extends Component {
     val io = new Bundle
     {
         val RamInterface = new Bundle
@@ -64,23 +81,22 @@ class ProgrammingInterface() extends Component {
 
 /***-Blocks-***/
 
-    val baudgen = True//BaudRateGen(57600);
+    val baudGen = new BaudRateGen(Baud);
     val uart_tx = new uart_tx()
     val uart_rx = new uart_rx()
 
     val hex2value = new Hex2Value()
-
     val byte2hex = new Byte2Hex()
 
 /***-Routing-***/
 
     //UartTX
-    uart_rx.io.en_16_x_baud := baudgen
+    uart_rx.io.en_16_x_baud := baudGen.io.tick
     uart_rx.io.buffer_read := False
     uart_rx.io.buffer_reset := uartReset
 
     //UartTX
-    uart_tx.io.en_16_x_baud := baudgen
+    uart_tx.io.en_16_x_baud := baudGen.io.tick
     uart_tx.io.data_in := 0x00
     uart_tx.io.buffer_write := False
     uart_tx.io.buffer_reset := uartReset
@@ -324,7 +340,7 @@ class ProgrammingInterface() extends Component {
     uart_rx.io.serial_in := io.UartRX
 }
 
-//Define a custom SpinalHDL configuration with synchronous reset instead of the default asynchronous one. This configuration can be resued everywhere
+//Define a custom SpinalHDL configuration with synchronous reset instead of the default asynchronous one. This configuration can be reused everywhere
 object ProgrammingInterfaceConfig extends SpinalConfig(
     targetDirectory = ".",
     oneFilePerComponent = true,
@@ -335,15 +351,15 @@ object ProgrammingInterfaceConfig extends SpinalConfig(
 //Generate the MyTopLevel's Verilog using the above custom configuration.
 object ProgrammingInterfaceGen {
     def main(args: Array[String]) {
-        ProgrammingInterfaceConfig.generateVerilog(new ProgrammingInterface).printPruned
+        ProgrammingInterfaceConfig.generateVerilog(new ProgrammingInterface(9600)).printPruned
     }
 }
 
-//Define a custom SpinalHDL configuration with synchronous reset instead of the default asynchronous one. This configuration can be resued everywhere
+//Define a custom SpinalHDL configuration with synchronous reset instead of the default asynchronous one. This configuration can be reused everywhere
 object ProgrammingInterface_Test {
     def main(args: Array[String]) {
-        SimConfig.withConfig(SpinalConfig(defaultClockDomainFrequency = FixedFrequency(8 MHz), defaultConfigForClockDomains = ClockDomainConfig(resetKind = SYNC))).withWave.compile{
-            val dut = new ProgrammingInterface()
+        SimConfig.withConfig(SpinalConfig(defaultClockDomainFrequency = FixedFrequency(8 MHz), defaultConfigForClockDomains = ClockDomainConfig(resetKind = SYNC))).withFstWave.compile{
+            val dut = new ProgrammingInterface(9600)
             dut.uart_tx.io.buffer_full.simPublic()
             dut.uart_rx.io.buffer_read.simPublic()
             dut.uart_rx.io.buffer_data_present.simPublic()
@@ -452,7 +468,7 @@ object ProgrammingInterface_Test {
                         }
                     }
 
-                    if(t >= 9000) loop.break;
+                    if(t >= 999999) loop.break;
                     t+=1
                     dut.clockDomain.waitRisingEdge()
                 }
