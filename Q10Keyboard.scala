@@ -15,6 +15,7 @@ class Q10Keyboard extends Component{
 		val i_sda = in Bool()
         val i_hold = in Bool()
 
+        val key_Held = out Bool()
         val key_code_stream = master Stream (Bits(8 bits))
     }
 
@@ -42,7 +43,7 @@ class Q10Keyboard extends Component{
 
     val keyState = Reg(Bits(2 bits))
     val keyCode = Reg(Bits(8 bits))
-
+    val keyHeld = Reg(Bool()) init(False)
     val source = Stream(Bits(8 bits))
 
 	val OutputFiFo = StreamFifo(
@@ -55,6 +56,8 @@ class Q10Keyboard extends Component{
 
     source.payload := keyCode
     source.valid := False
+
+    io.key_Held := keyHeld
 
     val fsm = new StateMachine 
     {
@@ -162,8 +165,13 @@ class Q10Keyboard extends Component{
         val ShowCode: State = new State
         {
             whenIsActive{
-                when(keyState === 3){
+                when(keyState === 1){
                     source.valid := True
+                    keyHeld := False
+                }elsewhen(keyState === 2){
+                    keyHeld := True
+                }elsewhen(keyState === 3){
+                    keyHeld := False
                 }
                 goto(Timeout)
             }

@@ -28,6 +28,7 @@ class BaudRateGen(Baud: BigInt) extends Component {
 class ProgrammingInterface(Baud: BigInt) extends Component {
     val io = new Bundle
     {
+        val keys = master Stream (Bits(8 bit))
         val RamInterface = new Bundle
         {
             val Address = out Bits(16 bit)
@@ -35,7 +36,7 @@ class ProgrammingInterface(Baud: BigInt) extends Component {
             val DataOut = out Bits(8 bit)
             val Write   = out Bool()
         }
-//        val RX_Data = in Bits(8 bit)
+
         val FlagIn = in Bits(8 bit)
         val FlagOut = out Bits(8 bit)
         val UartTX = out Bool()
@@ -70,6 +71,8 @@ class ProgrammingInterface(Baud: BigInt) extends Component {
     val byteLowerHex = UInt(8 bits)
 
     val ramWrite = False
+    val ramDataSel = False
+    val ramDataSelLast = RegNext(ramDataSel)
     val ramDataOut = Bits(8 bits)
 
 /***-IO stuff-***/
@@ -78,6 +81,18 @@ class ProgrammingInterface(Baud: BigInt) extends Component {
     io.RamInterface.DataOut := ramDataOut
     io.RamInterface.Write := ramWrite
     io.FlagOut := flag
+
+/***-Streams-***/
+    val keyIn = Stream(Bits(8 bits))
+    val keyFifo = StreamFifo(
+      dataType = Bits(8 bits),
+      depth    = 16
+    )
+    keyFifo.io.push << keyIn
+    keyFifo.io.pop  >> io.keys
+
+    keyIn.payload := workingReg(7 downto 0)
+    keyIn.valid := False
 
 /***-Blocks-***/
 
@@ -102,7 +117,11 @@ class ProgrammingInterface(Baud: BigInt) extends Component {
     uart_tx.io.buffer_reset := uartReset
 
     //Ram
-    ramDataOut := uart_rx.io.data_out
+    when(ramDataSel || ramDataSelLast){
+        ramDataOut := workingReg(7 downto 0)
+    }otherwise{
+        ramDataOut := uart_rx.io.data_out
+    }
 
     //Byte2Hex
     when(byte2HexSelect){
@@ -206,6 +225,9 @@ class ProgrammingInterface(Baud: BigInt) extends Component {
                     }elsewhen(dataInt === '`'){
                         amount.setValue(1)
                         goto(WriteBytes)   
+                    }elsewhen(dataInt === 't'){
+                        amount.setValue(1)
+                        goto(TypeByte)   
                     }
                 }
             }
@@ -272,6 +294,7 @@ class ProgrammingInterface(Baud: BigInt) extends Component {
                         shiftWorkingReg := True
                         amount.decrement()
                     }otherwise{
+                        ramDataSel := True
                         ramWrite := True
                         addressAdd := True
                         StartMSGPointer.setValue(29) //Ok.
@@ -333,12 +356,31 @@ class ProgrammingInterface(Baud: BigInt) extends Component {
                 }
             }
         }
+        val TypeByte: State = new State {
+            whenIsActive {
+                when(uart_rx.io.buffer_data_present || amount === 0){                    
+                    when(amount === 0){
+                        when(keyIn.ready){
+                            keyIn.valid := True
+                            StartMSGPointer.setValue(29) //Ok.
+                            goto(SendStartMsg)
+                        }
+                    }otherwise{
+                        latchWorkingReg := True
+                        uart_rx.io.buffer_read := True
+                        amount.decrement()
+                    }
+                }
+            }
+        }
     }
 
 /***-Post IO-***/
-    io.UartTX := uart_tx.io.serial_out
+    io.UartTX := uart_tx.io.serial_out 
     uart_rx.io.serial_in := io.UartRX
 }
+
+
 
 //Define a custom SpinalHDL configuration with synchronous reset instead of the default asynchronous one. This configuration can be reused everywhere
 object ProgrammingInterfaceConfig extends SpinalConfig(
@@ -358,12 +400,13 @@ object ProgrammingInterfaceGen {
 //Define a custom SpinalHDL configuration with synchronous reset instead of the default asynchronous one. This configuration can be reused everywhere
 object ProgrammingInterface_Test {
     def main(args: Array[String]) {
-        SimConfig.withConfig(SpinalConfig(defaultClockDomainFrequency = FixedFrequency(8 MHz), defaultConfigForClockDomains = ClockDomainConfig(resetKind = SYNC))).withFstWave.compile{
+        SimConfig.withConfig(SpinalConfig(defaultClockDomainFrequency = FixedFrequency(1 MHz), defaultConfigForClockDomains = ClockDomainConfig(resetKind = SYNC))).withFstWave.compile{
             val dut = new ProgrammingInterface(9600)
             dut.uart_tx.io.buffer_full.simPublic()
-            dut.uart_rx.io.buffer_read.simPublic()
-            dut.uart_rx.io.buffer_data_present.simPublic()
-            dut.uart_rx.io.data_out.simPublic()
+            dut.uart_rx.rxFifo.io.push.payload.simPublic()
+            dut.uart_rx.rxFifo.io.push.ready.simPublic()
+            dut.uart_rx.rxFifo.io.push.valid.simPublic()
+            dut.uart_rx.io.buffer_full.simPublic()
             dut
         }.doSim { dut =>
             //Fork a process to generate the reset and the clock on the dut
@@ -371,104 +414,25 @@ object ProgrammingInterface_Test {
             dut.clockDomain.waitRisingEdge()
             dut.io.FlagIn #= 0xf4
             dut.io.RamInterface.DataIn #= 0x5a
+            var str = "a0400w42tc"
             var t = 0
             var d = 0
             val loop = new Breaks;
             loop.breakable {
                 while (true) {
-                    if(t >= 35 && t <= 40){
-                        dut.uart_tx.io.buffer_full #= true 
-                    }else{
-                        dut.uart_tx.io.buffer_full #= false 
-                    }
-
                     if(t>80){
-                        if(dut.uart_rx.io.buffer_read.toBoolean == true) d+=1
-                        if(d == 0){
-                            dut.uart_rx.io.data_out #= 'a'
-                            dut.uart_rx.io.buffer_data_present #= true
-                        }else if(d == 1){
-                            dut.uart_rx.io.data_out #= '0'
-                            dut.uart_rx.io.buffer_data_present #= true
-                        }else if(d == 2){
-                            dut.uart_rx.io.data_out #= 'f'
-                            dut.uart_rx.io.buffer_data_present #= true
-                        }else if(d == 3){
-                            dut.uart_rx.io.data_out #= '0'
-                            dut.uart_rx.io.buffer_data_present #= true
-                        }else if(d == 4){
-                            dut.uart_rx.io.data_out #= '0'
-                            dut.uart_rx.io.buffer_data_present #= true
-                        }else if(d == 5){
-                            dut.uart_rx.io.data_out #= '`'
-                            dut.uart_rx.io.buffer_data_present #= true
-                        }else if(d == 6){
-                            dut.uart_rx.io.data_out #= 16
-                            dut.uart_rx.io.buffer_data_present #= true
-                        }else if(d == 7){
-                            dut.uart_rx.io.data_out #= 0x00
-                            dut.uart_rx.io.buffer_data_present #= true
-                        }else if(d == 8){
-                            dut.uart_rx.io.data_out #= 0x01
-                            dut.uart_rx.io.buffer_data_present #= true
-                        }else if(d == 9){
-                            dut.uart_rx.io.data_out #= 0x02
-                            dut.uart_rx.io.buffer_data_present #= true
-                        }else if(d == 10){
-                            dut.uart_rx.io.data_out #= 0x03
-                            dut.uart_rx.io.buffer_data_present #= true
-                        }else if(d == 11){
-                            dut.uart_rx.io.data_out #= 0x04
-                            dut.uart_rx.io.buffer_data_present #= true
-                        }else if(d == 12){
-                            dut.uart_rx.io.data_out #= 0x05
-                            dut.uart_rx.io.buffer_data_present #= true
-                        }else if(d == 13){
-                            dut.uart_rx.io.data_out #= 0x06
-                            dut.uart_rx.io.buffer_data_present #= true
-                        }else if(d == 14){
-                            dut.uart_rx.io.data_out #= 0x07
-                            dut.uart_rx.io.buffer_data_present #= true
-                        }else if(d == 15){
-                            dut.uart_rx.io.data_out #= 0x08
-                            dut.uart_rx.io.buffer_data_present #= true
-                        }else if(d == 16){
-                            dut.uart_rx.io.data_out #= 0x09
-                            dut.uart_rx.io.buffer_data_present #= true
-                        }else if(d == 17){
-                            dut.uart_rx.io.data_out #= 0x0A
-                            dut.uart_rx.io.buffer_data_present #= true  
-                        }else if(d == 18){
-                            dut.uart_rx.io.data_out #= 0x0B
-                            dut.uart_rx.io.buffer_data_present #= true  
-                        }else if(d == 19){
-                            dut.uart_rx.io.data_out #= 0x0C
-                            dut.uart_rx.io.buffer_data_present #= true  
-                        }else if(d == 20){
-                            dut.uart_rx.io.data_out #= 0x0D
-                            dut.uart_rx.io.buffer_data_present #= true
-                        }else if(d == 21){
-                            dut.uart_rx.io.data_out #= 0x0E
-                            dut.uart_rx.io.buffer_data_present #= true  
-                        }else if(d == 21){
-                            dut.uart_rx.io.data_out #= 0x0F
-                            dut.uart_rx.io.buffer_data_present #= true          
-                        }else if(d == 22){
-                            dut.uart_rx.io.data_out #= 0x10
-                            dut.uart_rx.io.buffer_data_present #= true                   
-                        }else if(d == 23){
-                            dut.uart_rx.io.data_out #= 0x11
-                            dut.uart_rx.io.buffer_data_present #= true
-                        }else if(d == 24){
-                            dut.uart_rx.io.data_out #= 0x12
-                            dut.uart_rx.io.buffer_data_present #= true    
+                        if(dut.uart_rx.io.buffer_full.toBoolean == false && d < str.length())
+                        {
+                            dut.uart_rx.rxFifo.io.push.payload #= str.charAt(d).toByte
+                            dut.uart_rx.rxFifo.io.push.valid #= true
+                            d+=1
                         }else {
-                            dut.uart_rx.io.data_out #= 0
-                            dut.uart_rx.io.buffer_data_present #= false
+                            dut.uart_rx.rxFifo.io.push.payload #= 0
+                            dut.uart_rx.rxFifo.io.push.valid #= false
                         }
                     }
 
-                    if(t >= 999999) loop.break;
+                    if(t >= 99999) loop.break;
                     t+=1
                     dut.clockDomain.waitRisingEdge()
                 }
