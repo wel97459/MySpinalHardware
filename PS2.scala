@@ -10,52 +10,95 @@ import java.io.FileReader
 import scala.util.control.Breaks
 import _root_.com.opencsv._
 
-class PS2_Keyboard extends Component 
+class PS2_Keyboard(Timeout: BigInt) extends Component 
 {
     val io = new Bundle {
         val clock_in = in Bool()
         val data_in = in Bool()
-        val data_out = out Bits(8 bits)
-        val valid = out Bool()
+        val output = master Stream(Bits(8 bits))
     }
+
+    val data_out = Stream(Bits(8 bits))
+    val outFIFO = StreamFifo(
+        dataType = Bits(8 bits),
+        depth    = 16
+    )
 
     val data = Reg(Bits(11 bits)) init(0)
     val dataLatch = Reg(Bits(8 bits)) init(0)
     val bitCount = Reg(UInt(4 bits)) init(0)
-    val bitTimeOut = Reg(UInt(16 bits)) init(0)
+    val bitTimeOut = Counter(Timeout+10)
     val parity = Reg(Bool()) init(False) 
     
-    io.valid := False
+    outFIFO.io.push << data_out
+    outFIFO.io.pop >> io.output
+    data_out.payload := data(8 downto 1)
+    data_out.valid := False
 
     when(bitCount > 0){
-        bitTimeOut := bitTimeOut + 1
+        bitTimeOut.increment()
     }
 
     when(io.clock_in.rise()){
         data := io.data_in ## data(10 downto 1)
         bitCount := bitCount + 1
-        bitTimeOut := 0
+        bitTimeOut.clear()
         when(io.data_in && bitCount <= 0x8){
             parity := !parity
         }
     }
 
-    when(bitCount === 0xB || bitTimeOut > 100){
-        when(data(10) && !data(0) && !parity === data(9)){
+    when(bitCount === 0xB || bitTimeOut.willOverflow){
+        when(data(10) && !data(0) && !parity === data(9) && dataLatch =/= data(8 downto 1)){
             dataLatch := data(8 downto 1)
-            io.valid := bitTimeOut < 100
+            data_out.valid := !bitTimeOut.willOverflow && data_out.ready
         }
         data := 0 
-        bitTimeOut := 0
+        bitTimeOut.clear()
         bitCount := 0
         parity := False
     }
-    io.data_out := dataLatch
 }
+
+class PS2_Keyboard_Decoder(Timeout: BigInt) extends Component {
+    val io = new Bundle {
+        val clock_in = in Bool()
+        val data_in = in Bool()
+        val keyCode = master Stream(Bits(8 bits))
+    }
+
+    val keyCode_out = Stream(Bits(8 bits))
+    val keyCodeFIFO = StreamFifo(
+        dataType = Bits(8 bits),
+        depth    = 16
+    )
+
+    keyCodeFIFO.io.push << keyCode_out
+    keyCodeFIFO.io.pop >> io.keyCode
+    keyCode_out.payload := 0
+    keyCode_out.valid := False
+
+
+    val fsm = new StateMachine {
+        val Init: State = new State with EntryPoint {
+            whenIsActive {
+                goto(WaitForData)
+            }
+        }
+
+        val WaitForData: State = new State {
+            whenIsActive {
+
+
+            }
+        }
+    }
+}
+
 object PS2_Keyboard_Test {
     def main(args: Array[String]) {
         SimConfig.withFstWave.compile{
-            val dut = new PS2_Keyboard()
+            val dut = new PS2_Keyboard(100)
             dut
         }.doSim { dut =>
             //Fork a process to generate the reset and the clock on the dut
@@ -63,13 +106,12 @@ object PS2_Keyboard_Test {
             dut.io.data_in #= true
             dut.clockDomain.forkStimulus(period = 10)
 
-            val pathToFile = "data/test.csv"
+            val pathToFile = "data/PS2_abcdef.csv"
 
             val reader = new FileReader(pathToFile)
             val csvReader = new CSVReader(reader)
 
             var row: Array[String] = csvReader.readNext()
-
 
             dut.clockDomain.waitRisingEdge()
 
