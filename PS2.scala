@@ -67,6 +67,11 @@ class PS2_Keyboard_Decoder(Timeout: BigInt) extends Component {
         val keyCode = master Stream(Bits(8 bits))
     }
 
+    val ps2Key = new PS2_Keyboard(100)
+    ps2Key.io.clock_in := io.clock_in
+    ps2Key.io.data_in := io.data_in
+    ps2Key.io.output.ready := False
+
     val keyCode_out = Stream(Bits(8 bits))
     val keyCodeFIFO = StreamFifo(
         dataType = Bits(8 bits),
@@ -88,8 +93,21 @@ class PS2_Keyboard_Decoder(Timeout: BigInt) extends Component {
 
         val WaitForData: State = new State {
             whenIsActive {
+                when(ps2Key.io.output.valid){
+                    when(ps2Key.io.output.payload === 0xF0){
+                        goto(KeyEnd)
+                    }
+                    ps2Key.io.output.ready := True
+                }
+            }
+        }
 
-
+        val KeyEnd: State = new State {
+            whenIsActive {
+                when(ps2Key.io.output.valid){
+                    goto(WaitForData)
+                    ps2Key.io.output.ready := True
+                }
             }
         }
     }
@@ -98,7 +116,7 @@ class PS2_Keyboard_Decoder(Timeout: BigInt) extends Component {
 object PS2_Keyboard_Test {
     def main(args: Array[String]) {
         SimConfig.withFstWave.compile{
-            val dut = new PS2_Keyboard(100)
+            val dut = new PS2_Keyboard_Decoder(100)
             dut
         }.doSim { dut =>
             //Fork a process to generate the reset and the clock on the dut
