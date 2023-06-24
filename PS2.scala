@@ -9,6 +9,7 @@ import java.io.FileReader
 
 import scala.util.control.Breaks
 import _root_.com.opencsv._
+import spinal.lib.misc.Timer
 
 class PS2_Keyboard(Timeout: BigInt) extends Component 
 {
@@ -49,7 +50,7 @@ class PS2_Keyboard(Timeout: BigInt) extends Component
     }
 
     when(bitCount === 0xB || bitTimeOut.willOverflow){
-        when(data(10) && !data(0) && !parity === data(9) && dataLatch =/= data(8 downto 1)){
+        when(data(10) && !data(0) && !parity === data(9)){
             dataLatch := data(8 downto 1)
             data_out.valid := !bitTimeOut.willOverflow && data_out.ready
         }
@@ -60,7 +61,7 @@ class PS2_Keyboard(Timeout: BigInt) extends Component
     }
 }
 
-class PS2_Keyboard_Decoder(Timeout: BigInt) extends Component {
+class PS2_Keyboard_Decoder(TimeoutAmt: BigInt) extends Component {
     val io = new Bundle {
         val clock_in = in Bool()
         val data_in = in Bool()
@@ -80,10 +81,21 @@ class PS2_Keyboard_Decoder(Timeout: BigInt) extends Component {
 
     keyCodeFIFO.io.push << keyCode_out
     keyCodeFIFO.io.pop >> io.keyCode
-    keyCode_out.payload := 0
     keyCode_out.valid := False
 
+    val Shift = Reg(Bool()) init(False)
+    val Ctrl = Reg(Bool()) init(False)
 
+    val DecoderAddr = Reg(Bits(9 bits)) init(0)
+    val DecoderAddrNext = Ctrl ## Shift ## ps2Key.io.output.payload(6 downto 0);
+
+    val keyDecoderRom = new RamInit("./data/keys.bin", 9)
+    keyDecoderRom.io.addra := DecoderAddr
+    keyDecoderRom.io.dina := 0x00
+    keyDecoderRom.io.ena := True
+    keyDecoderRom.io.wea := 0
+
+    keyCode_out.payload := keyDecoderRom.io.douta
     val fsm = new StateMachine {
         val Init: State = new State with EntryPoint {
             whenIsActive {
@@ -96,17 +108,68 @@ class PS2_Keyboard_Decoder(Timeout: BigInt) extends Component {
                 when(ps2Key.io.output.valid){
                     when(ps2Key.io.output.payload === 0xF0){
                         goto(KeyEnd)
+                    }elsewhen(ps2Key.io.output.payload === 0xE0){
+                        goto(ExtendedKey)
+                    }elsewhen(ps2Key.io.output.payload === 0x12 || ps2Key.io.output.payload === 0x59){
+                        Shift := True
+                    }elsewhen(ps2Key.io.output.payload === 0x14){
+                        Ctrl := True
+                    }otherwise{
+                        DecoderAddr := DecoderAddrNext
+                        goto(KeyPressed)
                     }
                     ps2Key.io.output.ready := True
                 }
             }
         }
 
+        val KeyPressed: State = new StateDelay(2) {
+            whenCompleted {
+                when(keyDecoderRom.io.douta.asUInt >= 0x08){
+                    keyCode_out.valid := keyCode_out.ready
+                }
+                goto(WaitForData)
+            }
+        }
+
+        val ExtendedKey: State = new State {
+            whenIsActive {
+                when(ps2Key.io.output.valid){
+                    when(ps2Key.io.output.payload === 0xF0){
+                        goto(KeyEnd)
+                    }otherwise{
+                        when(ps2Key.io.output.payload === 0x14){
+                            Ctrl := True
+                            goto(WaitForData)
+                        } otherwise {
+                            DecoderAddr := DecoderAddrNext
+                            goto(ExtendedKeyPressed)
+                        }
+                    }
+                    ps2Key.io.output.ready := True
+                }
+            }
+        }
+
+        val ExtendedKeyPressed: State = new StateDelay(2) {
+            whenCompleted {
+                when(keyDecoderRom.io.douta.asUInt =/= 0x00){
+                    keyCode_out.valid := keyCode_out.ready
+                }
+                goto(WaitForData)
+            }
+        }
+
         val KeyEnd: State = new State {
             whenIsActive {
                 when(ps2Key.io.output.valid){
-                    goto(WaitForData)
+                    when(ps2Key.io.output.payload === 0x12 || ps2Key.io.output.payload === 0x59){
+                        Shift := False
+                    }elsewhen(ps2Key.io.output.payload === 0x14){
+                        Ctrl := False
+                    }
                     ps2Key.io.output.ready := True
+                    goto(WaitForData)
                 }
             }
         }
