@@ -19,7 +19,7 @@ class MFM_Decoder extends Component
 
     val pll = Reg(UInt(8 bits)) init(0)
     val pllLast = Reg(UInt(8 bits)) init(0)
-    val pllRst = Reg(UInt(8 bits)) init(0x20)
+    val pllRst = Reg(UInt(8 bits)) init(0x00)
 
     when(io.data_in.fall()){
         pllLast := pll
