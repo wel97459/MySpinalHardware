@@ -29,8 +29,8 @@ class MFM_Decoder extends Component
             pllRst := 0x1f - pll
         } elsewhen(pll > 0x10 && pllLast >= 0x10) {
             pllRst := 0x20 - (pll - 0x10)
-        } elsewhen(pll < 0x20 && pllLast < 0x20) {
-            //pllRst := 0x10 - pll
+        } elsewhen(pll < 0x20 && pllLast < 0x10) {
+            pllRst := 0x0b + pll
         }
     }
 
