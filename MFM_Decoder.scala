@@ -16,32 +16,42 @@ class MFM_Decoder extends Component
         val clock = out Bool()
         //val mfm = out Bool()
     }
+      val data_decode = Reg(Bits(32 bits)) init(0)
+      val d01 = data_decode(29 downto 0) ## B"01"
+      val d001 = data_decode(28 downto 0) ## B"001"
+      val d0001 = data_decode(27 downto 0) ## B"0001"
+      val d0000001 = data_decode(24 downto 0) ## B"0000001"
 
-    val pll = Reg(UInt(8 bits)) init(0)
-    val pllLast = Reg(UInt(8 bits)) init(0)
-    val pllRst = Reg(UInt(8 bits)) init(0x00)
+      val counter = Counter(127)
+      val countLast = Reg(UInt(7 bits)) init(0)
+      
+      val count2 = counter.value >= 25 && counter.value <= 35
+      val count3 = counter.value >= 40 && counter.value <= 50
+      val count4 = counter.value >= 57 && counter.value <= 67
+      val count6 = counter.value >= 90 && counter.value <= 100
+
+    //   val countLast2 = countLast > 25 && countLast < 35
+    //   val countLast3 = countLast > 40 && countLast < 50
+    //   val countLast4 = countLast > 57 && countLast < 67
 
     when(io.data_in.fall()){
-        pllLast := pll
-        when(pll >= 0x20 && pllLast >= 0x10){
-            pllRst := pll 
-        } elsewhen(pll <= 0x10 && pllLast < 0x10){
-            pllRst := 0x1f - pll
-        } elsewhen(pll > 0x10 && pllLast >= 0x10) {
-            pllRst := 0x20 - (pll - 0x10)
-        } elsewhen(pll < 0x20 && pllLast < 0x10) {
-            pllRst := 0x0b + pll
+        counter.clear()
+        countLast := counter.value
+
+        when(count2){
+            data_decode := d01
+        }elsewhen(count3){
+            data_decode := d001
+        }elsewhen(count4){
+            data_decode := d0001
+        }elsewhen(count6){
+            data_decode := d0000001
         }
-    }
-
-    when(pll === 0){
-        pll := pllRst
-        pllRst := 0x20
     }otherwise{
-        pll :=  pll - 1
+        counter.increment()
     }
 
-    io.clock := pll === 0
+    io.clock := False
 }
 
 object MFM_Decoder_Test {
