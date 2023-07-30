@@ -19,18 +19,15 @@ class FM_Decoder extends Component
         //val mfm = out Bool()
     }
 
-    val data_decode = Reg(Bits(16 bits)) init(0)
-    val d0 = data_decode(14 downto 0) ## B"0"
-    val d1 = data_decode(14 downto 0) ## B"1"
-
-    val clock_decode = Reg(Bits(16 bits)) init(0)
-    val c1 = clock_decode(14 downto 0) ## B"1"
-    val c01 = clock_decode(13 downto 0) ## B"01"
+    val data_decode = Reg(Bits(8 bits)) init(0)
+    val d0 = data_decode(6 downto 0) ## B"0"
+    val d1 = data_decode(6 downto 0) ## B"1"
 
     val counter = Counter(127)
     val countLast = Reg(UInt(7 bits)) init(0)
 
-    // val counterBit = Counter(16)
+    val countBits = Counter(8)
+    val countBytes = Counter(1024)
     
     val count2 = counter.value >= 25 && counter.value <= 35
     val count4 = counter.value >= 55 && counter.value <= 65
@@ -38,30 +35,122 @@ class FM_Decoder extends Component
     val countLast2 = countLast > 25 && countLast < 35
     val countLast4 = countLast > 55 && countLast < 65
 
-    val state = Reg(Bool()) init(False)  
-    val state_start = Reg(Bool()) init(False)  
+    val state_read = Reg(Bool()) init(False)  
 
-    // when(data_decode === 0xffff && !state_start){
-    
-    // }
+    val markIndex = False
+    val markAddress = False
+    val markFF = data_decode === 0xff
+    val dataFF00 = !(data_decode === 0x00 || data_decode === 0xff) && countBytes.value =/= 0
 
+    val bitTick = False
+    val bitTickDelay = RegNext(bitTick) init(False)
     when(io.data_in.fall()){
         counter.clear()
         countLast := counter.value
-
         when(count2){
-            state := !state
-            when(!state) {
+            state_read := !state_read
+            when(!state_read) {
                 data_decode := d1
+                bitTick := True
             }
-            clock_decode := c1
         }elsewhen(count4){
-            state := True
+            state_read := True
             data_decode := d0
-            clock_decode := c01
+            bitTick := True
         }
+
     }otherwise{
         counter.increment()
+    }
+
+    val fsm = new StateMachine
+	{
+        val Wait: State = new State with EntryPoint 
+        {
+           whenIsActive
+           {
+                when(markFF.rise() && bitTickDelay){
+                    countBits.clear()
+                    countBytes.clear()
+                    goto(Count40Index)
+                }
+           }
+        }
+        val Count40Index: State = new State
+        {
+            whenIsActive
+            {
+                when(bitTickDelay){
+                    countBits.increment()
+                    when(countBits.willOverflow){
+                        countBytes.increment()
+                    }
+
+                    when(countBytes.value === 39 && data_decode === 0x00)
+                    {
+                        countBytes.clear()
+                        goto(Count6Index)
+                    }elsewhen(countBytes.value > 39 || countBytes.value < 39 && dataFF00){
+                        goto(Wait)
+                    }
+                }
+            }
+        }
+        val Count6Index: State = new State
+        {
+            whenIsActive
+            {
+               when(bitTickDelay){
+                    countBits.increment()
+                    when(countBits.willOverflow){
+                        countBytes.increment()
+                    }
+                    when(countBytes.value === 5 && data_decode === 0xA9)
+                    {
+                        markIndex := True
+                        countBytes.clear()
+                        goto(Count26ID)
+                    }elsewhen(countBytes.value > 5 || countBytes.value < 5 && dataFF00){
+                        goto(Wait)
+                    }
+                }
+            }
+        }
+        
+        val Count26ID: State = new State
+        {
+            whenIsActive
+            {
+               when(bitTickDelay){
+                    countBits.increment()
+                    when(countBits.willOverflow){
+                        countBytes.increment()
+                    }
+                    when(countBytes.value === 25 && data_decode === 0xFE)
+                    {
+                        markAddress := True
+                        countBytes.clear()
+                        goto(Header)
+                    }elsewhen(countBytes.value > 25 || countBytes.value < 25 && dataFF00){
+                        goto(Wait)
+                    }
+                }
+            }
+        }
+        val Header: State = new State
+        {
+            whenIsActive{
+               when(bitTickDelay){
+                    countBits.increment()
+                    when(countBits.willOverflow){
+                        countBytes.increment()
+                    }
+                    when(countBytes > 201){
+                        goto(Wait)
+                    }
+                }
+            }
+        }
     }
 
     io.clock := False
