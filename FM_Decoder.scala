@@ -19,9 +19,13 @@ class FM_Decoder extends Component
         //val mfm = out Bool()
     }
 
-    val data_decode = Reg(Bits(8 bits)) init(0)
-    val d0 = data_decode(6 downto 0) ## B"0"
-    val d1 = data_decode(6 downto 0) ## B"1"
+    val decode = Reg(Bits(16 bits)) init(0)
+    val d1 = decode(14 downto 0) ## B"1"
+    val d01 = decode(13 downto 0) ## B"01"
+    val d101 = decode(12 downto 0) ## B"101"
+    
+    val data_decode = decode(14) ## decode(12) ## decode(10) ## decode(8) ## decode(6) ## decode(4) ## decode(2) ## decode(0)
+    val clock_decode = decode(15) ## decode(13) ## decode(11) ## decode(9) ## decode(7) ## decode(5) ## decode(3) ## decode(1)
 
     val counter = Counter(127)
     val countLast = Reg(UInt(7 bits)) init(0)
@@ -31,6 +35,7 @@ class FM_Decoder extends Component
     
     val count2 = counter.value >= 25 && counter.value <= 35
     val count4 = counter.value >= 55 && counter.value <= 65
+    val count6 = counter.value >= 90 && counter.value <= 100
 
     val countLast2 = countLast > 25 && countLast < 35
     val countLast4 = countLast > 55 && countLast < 65
@@ -44,21 +49,28 @@ class FM_Decoder extends Component
 
     val bitTick = False
     val bitTickDelay = RegNext(bitTick) init(False)
-    when(io.data_in.fall()){
-        counter.clear()
-        countLast := counter.value
-        when(count2){
-            state_read := !state_read
-            when(!state_read) {
-                data_decode := d1
-                bitTick := True
-            }
-        }elsewhen(count4){
-            state_read := True
-            data_decode := d0
-            bitTick := True
-        }
 
+    when(io.data_in.fall()){
+        when(count2){
+            state_read := True
+            decode := d1
+        }elsewhen(count4){
+            bitTick := True
+            state_read := False
+            when(state_read){
+                decode := d1
+            }otherwise{
+                decode := d01
+            }
+            counter.clear()
+            countLast := counter.value
+        }elsewhen(count6){
+            decode := d101
+            bitTick := True
+            state_read := False
+            counter.clear()
+            countLast := counter.value
+        }
     }otherwise{
         counter.increment()
     }
