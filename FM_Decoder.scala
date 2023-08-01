@@ -19,14 +19,10 @@ class FM_Decoder extends Component
         //val mfm = out Bool()
     }
 
-    val decode = Reg(Bits(16 bits)) init(0)
-    val d1 = decode(14 downto 0) ## B"1"
-    val d01 = decode(13 downto 0) ## B"01"
-    val d101 = decode(12 downto 0) ## B"101"
-    
-    val data_decode = decode(14) ## decode(12) ## decode(10) ## decode(8) ## decode(6) ## decode(4) ## decode(2) ## decode(0)
-    val clock_decode = decode(15) ## decode(13) ## decode(11) ## decode(9) ## decode(7) ## decode(5) ## decode(3) ## decode(1)
-
+    val data_decode = Reg(Bits(16 bits)) init(0)
+    val d1 = data_decode(14 downto 0) ## B"1"
+    val d0 = data_decode(14 downto 0) ## B"0"
+     
     val counter = Counter(127)
     val countLast = Reg(UInt(7 bits)) init(0)
 
@@ -44,8 +40,9 @@ class FM_Decoder extends Component
 
     val markIndex = False
     val markAddress = False
-    val markFF = data_decode === 0xff
-    val dataFF00 = !(data_decode === 0x00 || data_decode === 0xff) && countBytes.value =/= 0
+    val dataByte = data_decode(7 downto 0)
+    val markFF = dataByte  === 0xff
+    val dataFF00 = !(dataByte === 0x00 || dataByte === 0xff) && countBytes.value =/= 0
 
     val bitTick = False
     val bitTickDelay = RegNext(bitTick) init(False)
@@ -53,19 +50,18 @@ class FM_Decoder extends Component
     when(io.data_in.fall()){
         when(count2){
             state_read := True
-            decode := d1
         }elsewhen(count4){
             bitTick := True
             state_read := False
             when(state_read){
-                decode := d1
+                data_decode := d1
             }otherwise{
-                decode := d01
+                data_decode := d0
             }
             counter.clear()
             countLast := counter.value
         }elsewhen(count6){
-            decode := d101
+            data_decode := d0
             bitTick := True
             state_read := False
             counter.clear()
@@ -81,12 +77,30 @@ class FM_Decoder extends Component
         {
            whenIsActive
            {
-                when(markFF.rise() && bitTickDelay){
+                when(data_decode === 0xFFFE && bitTickDelay){
                     countBits.clear()
                     countBytes.clear()
-                    goto(Count40Index)
+                    markIndex := True
+                    goto(CheckStart)
                 }
            }
+        }
+        val CheckStart: State = new State
+        {
+            whenIsActive
+            {
+                when(bitTickDelay){
+                    countBits.increment()
+                    when(countBits.willOverflow){
+                        countBytes.increment()
+                        when(data_decode === 0xFEFF){
+                            goto(Count40Index)
+                        }otherwise{
+                            goto(Wait)
+                        }
+                    }
+                }
+            }
         }
         val Count40Index: State = new State
         {
@@ -98,7 +112,7 @@ class FM_Decoder extends Component
                         countBytes.increment()
                     }
 
-                    when(countBytes.value === 39 && data_decode === 0x00)
+                    when(countBytes.value === 39 && dataFF00)
                     {
                         countBytes.clear()
                         goto(Count6Index)
@@ -117,7 +131,7 @@ class FM_Decoder extends Component
                     when(countBits.willOverflow){
                         countBytes.increment()
                     }
-                    when(countBytes.value === 5 && data_decode === 0xA9)
+                    when(countBytes.value === 5 && dataByte === 0xA9)
                     {
                         markIndex := True
                         countBytes.clear()
