@@ -1,7 +1,5 @@
 package MySpinalHardware
 
-package MySpinalHardware
-
 import spinal.core._
 import spinal.lib._
 import spinal.lib.fsm._
@@ -14,84 +12,47 @@ class FM_Decoder extends Component
 {
     val io = new Bundle {
         val index_in = in Bool() 
-        val data_in = in Bool()
-        val clock = out Bool()
-        //val mfm = out Bool()
+        val flux_in = in Bool()
+
+        val data_out = out Bits(8 bits)
+        val byteTick = out Bool()
+        val header_start = out Bool()
+        val data_start = out Bool()
     }
 
-    val data_decode = Reg(Bits(16 bits)) init(0)
-    val d1 = data_decode(14 downto 0) ## B"1"
-    val d0 = data_decode(14 downto 0) ## B"0"
-    val d11 = data_decode(13 downto 0) ## B"11"
      
-    val counter = Counter(127)
+    val counter = Reg(UInt(7 bits)) init(0)
     val countLast = Reg(UInt(7 bits)) init(0)
 
-    val countBits = Counter(8)
+    val countBits = Counter(16)
     val countBytes = Counter(1024)
+
+    val data_decode = Reg(Bits(16 bits)) init(0)
+    val d1 = data_decode(14 downto 0) ## !io.flux_in
     
-    val count2 = counter.value >= 25 && counter.value <= 35
-    val count4 = counter.value >= 55 && counter.value <= 65
-    val count6 = counter.value >= 90 
-
-    val countLast2 = countLast > 25 && countLast < 35
-    val countLast4 = countLast > 55 && countLast < 65
-
-    val state_read = Reg(Bool()) init(False)  
-    val state_clockFlip = Reg(Bool()) init(False)  
+    val clock = data_decode(14) ## data_decode(12) ## data_decode(10) ## data_decode(8) ## data_decode(6) ## data_decode(4) ## data_decode(2) ## data_decode(0)
+    val data = data_decode(15) ## data_decode(13) ## data_decode(11) ## data_decode(9) ## data_decode(7) ## data_decode(5) ## data_decode(3) ## data_decode(1)
 
     val bitTick = False
     val bitTickDelay = RegNext(bitTick) init(False)
 
-    val ByteTick = bitTickDelay && countBits === 7
-    val dataByte = data_decode(7 downto 0)
-    val dataByteLatched = RegNextWhen(dataByte, ByteTick)
+    val byteTick = bitTickDelay && countBits === 15
+    val dataByteLatched = RegNextWhen(data, byteTick)
 
-    val markIndex = False
-    val markAddress = False
-    val markFF = dataByteLatched  === 0xff
-    val dataFF00 = !(dataByteLatched === 0x00 || dataByteLatched === 0xff) && countBytes.value =/= 0
+    val addressMark = data_decode(1) || data_decode(3) || data_decode(5) || data_decode(10)
 
+    when(bitTickDelay){
+        data_decode := d1
+    }
 
-    when(io.data_in.fall()){
-        when(count2){
-            when(state_clockFlip){
-                bitTick := True
-                state_read := False
-                when(state_read){
-                    data_decode := d1
-                }otherwise{
-                    data_decode := d0
-                }
-                counter.clear()
-                countLast := counter.value
-            }otherwise{
-                state_read := True
-            }
-        }elsewhen(count4){
-            when(state_clockFlip){
-                state_read := True
-            }otherwise{
-                bitTick := True
-                state_read := False
-                when(state_read){
-                    data_decode := d1
-                }otherwise{
-                    data_decode := d0
-                }
-                counter.clear()
-                countLast := counter.value
-            }
-        }elsewhen(count6){
-            bitTick := True
-            state_read := True
-            data_decode := d1
-            state_clockFlip := !state_clockFlip
-            counter.clear()
-            countLast := counter.value
-        }
+    when(io.flux_in.fall()){
+        bitTick := True
+        counter := 0
     }otherwise{
-        counter.increment()
+        when(counter === 40){
+            bitTick := True
+        }
+        counter := counter + 1
     }
 
     when(bitTickDelay){
@@ -101,103 +62,79 @@ class FM_Decoder extends Component
             countBytes.increment()
         }
     }
+
+    io.data_out := dataByteLatched
+    io.header_start := False
+    io.data_start := False
+    io.byteTick := byteTick
     val fsm = new StateMachine
 	{
         val Wait: State = new State with EntryPoint 
         {
            whenIsActive
            {
-                when(data_decode === 0xFF00 && bitTickDelay){
-                    countBits.clear()
+                when(addressMark.fall()){
+                    countBits := 8
                     countBytes.clear()
-                    markIndex := True
-                    goto(Count6Index)
+                    goto(HeaderCheck)
                 }
            }
         }
 
-        val Count40Index: State = new State
+        val HeaderCheck: State = new State
         {
-            whenIsActive
-            {
-                when(ByteTick){
-                    when(countBytes.value === 40 && markFF)
-                    {
-                        countBytes.clear()
-                        goto(Count6Index)
-                    }elsewhen(countBytes.value > 40 || countBytes.value < 40 && dataFF00){
-                        goto(Wait)
-                    }
-                }
-            }
-        }
-        val Count6Index: State = new State
-        {
-            whenIsActive
-            {
-               when(ByteTick){
-                    when(countBytes.value === 6 && dataByteLatched === 0xFC)
-                    {
-                        markIndex := True
-                        countBytes.clear()
-                        goto(Count26ID)
-                    }elsewhen(countBytes.value > 6 || countBytes.value < 6 && dataFF00){
-                        goto(Wait)
-                    }
-                }
-            }
-        }
-        
-        val Count26ID: State = new State
-        {
-            whenIsActive
-            {
-               when(ByteTick){
-                    when(countBytes.value === 25 && dataByteLatched === 0xFF)
-                    {
-                        markAddress := True
-                        countBytes.clear()
-                        goto(Count6ID)
-                    }elsewhen(countBytes.value > 25 || countBytes.value < 25 && dataFF00){
+            whenIsActive{
+                
+                when(byteTick){
+                    when(dataByteLatched === 0xFC && countBytes === 0){
+                        io.header_start := True
+                        goto(Header)
+                    }  otherwise{
                         goto(Wait)
                     }
                 }
             }
         }
 
-        val Count6ID: State = new State
-        {
-            whenIsActive
-            {
-               when(ByteTick){
-                    when(countBytes.value === 7 && dataByteLatched === 0xFE)
-                    {
-                        markIndex := True
-                        countBytes.clear()
-                        goto(Header)
-                    }elsewhen(countBytes.value > 7 || countBytes.value < 7 && dataFF00){
-                        goto(Wait)
-                    }
-                }
-            }
-        }
 
         val Header: State = new State
         {
             whenIsActive{
-               when(bitTickDelay){
-                    when(countBits.willOverflow){
-                        countBytes.increment()
-                    }
-                    when(countBytes > 190){
-                        goto(Wait)
-                    }
+                when(byteTick && countBytes === 8 && dataByteLatched === 0xFF){
+                    countBytes.clear()
+                    goto(WaitDataIndex)
+                }elsewhen(byteTick && countBytes > 8) {
+                    goto(Wait)
                 }
             }
         }
-    }
 
-    io.clock := False
+
+        val WaitDataIndex: State = new State
+        {
+            whenIsActive{
+                when(addressMark.fall()){
+                    countBits := 8
+                }
+                when(byteTick && dataByteLatched === 0x00 && countBytes === 15){
+                    countBytes.clear()
+                    io.data_start := True
+                    goto(Data)
+                }elsewhen(byteTick && countBytes > 15){
+                    goto(Wait)
+                }
+            }
+        }
+        val Data: State = new State
+        {
+            whenIsActive{
+                when(byteTick && dataByteLatched === 0xFF && countBytes === 131){
+                    goto(Wait)
+                }
+            }
+        }
+
+    }
 }
 
 object FM_Decoder_Test {
@@ -208,7 +145,7 @@ object FM_Decoder_Test {
         }.doSim { dut =>
             //Fork a process to generate the reset and the clock on the dut
             dut.io.index_in #= true
-            dut.io.data_in #= true
+            dut.io.flux_in #= true
             dut.clockDomain.forkStimulus(period = 10)
 
             val pathToFile = "data/test_floppy.bin"
@@ -228,9 +165,9 @@ object FM_Decoder_Test {
                     }
 
                     if((s & 0x04) == 0x04){
-                        dut.io.data_in #= true
+                        dut.io.flux_in #= true
                     }else{
-                        dut.io.data_in #= false
+                        dut.io.flux_in #= false
                     }
 
 
