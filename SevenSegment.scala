@@ -96,6 +96,44 @@ class SevenSegmentDriver(val NumberOfDisplays: BigInt = 1, val CycleSpeed: BigIn
     override def implicitValue: Bits = Cat(displays, segments)
 }
 
+
+class SevenSegment() extends ImplicitArea[Bits] { // extends Component {
+    val segments = Bits(7 bit)
+
+    val digit = Bits(4 bit)
+
+    val digit2segments = Vec(
+        Seq(
+            B"0111111", //0
+            B"0000110", //1
+            B"1011011", //2
+            B"1001111", //3
+            B"1100110", //4
+            B"1101101", //5
+            B"1111101", //6
+            B"0000111", //7
+            B"1111111", //8
+            B"1101111", //9
+            B"1110111", //A
+            B"1111100", //B
+            B"0111001", //C
+            B"1011110", //D
+            B"1111001", //E
+            B"1110001" //F
+        ).map(c => B(c,7 bit))
+    )
+
+    segments := digit2segments(digit.asUInt)
+
+    def retset(): Unit = {digit := 0}
+
+    def setDigit(number: UInt): Unit = {
+        digit := number.asBits.resize(4)
+    }
+
+    override def implicitValue: Bits = segments
+}
+
 class SevenSegmentDriverTest extends Component {
     val io = new Bundle {
         val c = in Bits(16 bit)

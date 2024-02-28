@@ -8,7 +8,7 @@ import spinal.core.sim._
 import java.io.FileReader
 
 import scala.util.control.Breaks
-import _root_.com.opencsv._
+//import _root_.com.opencsv._
 import spinal.lib.misc.Timer
 
 class PS2_Keyboard(Timeout: BigInt) extends Component 
@@ -176,50 +176,50 @@ class PS2_Keyboard_Decoder(TimeoutAmt: BigInt) extends Component {
     }
 }
 
-object PS2_Keyboard_Test {
-    def main(args: Array[String]) {
-        SimConfig.withFstWave.compile{
-            val dut = new PS2_Keyboard_Decoder(100)
-            dut
-        }.doSim { dut =>
-            //Fork a process to generate the reset and the clock on the dut
-            dut.io.clock_in #= true
-            dut.io.data_in #= true
-            dut.clockDomain.forkStimulus(period = 10)
+// object PS2_Keyboard_Test {
+//     def main(args: Array[String]) {
+//         SimConfig.withFstWave.compile{
+//             val dut = new PS2_Keyboard_Decoder(100)
+//             dut
+//         }.doSim { dut =>
+//             //Fork a process to generate the reset and the clock on the dut
+//             dut.io.clock_in #= true
+//             dut.io.data_in #= true
+//             dut.clockDomain.forkStimulus(period = 10)
 
-            val pathToFile = "data/PS2_abcdef.csv"
+//             val pathToFile = "data/PS2_abcdef.csv"
 
-            val reader = new FileReader(pathToFile)
-            val csvReader = new CSVReader(reader)
+//             val reader = new FileReader(pathToFile)
+//             val csvReader = new CSVReader(reader)
 
-            var row: Array[String] = csvReader.readNext()
+//             var row: Array[String] = csvReader.readNext()
 
-            dut.clockDomain.waitRisingEdge()
+//             dut.clockDomain.waitRisingEdge()
 
-            var c = 0;
-            val loop = new Breaks;
-            loop.breakable {
-                while (true) {
-                    if(row(1) == "1"){
-                        dut.io.clock_in #= true
-                    }else{
-                        dut.io.clock_in #= false
-                    }
+//             var c = 0;
+//             val loop = new Breaks;
+//             loop.breakable {
+//                 while (true) {
+//                     if(row(1) == "1"){
+//                         dut.io.clock_in #= true
+//                     }else{
+//                         dut.io.clock_in #= false
+//                     }
 
-                    if(row(2) == "1"){
-                        dut.io.data_in #= true
-                    }else{
-                        dut.io.data_in #= false
-                    }
+//                     if(row(2) == "1"){
+//                         dut.io.data_in #= true
+//                     }else{
+//                         dut.io.data_in #= false
+//                     }
 
 
-                    row = csvReader.readNext()
-                    if(row == null) loop.break()
+//                     row = csvReader.readNext()
+//                     if(row == null) loop.break()
 
-                    dut.clockDomain.waitRisingEdge()
-                }
-            }
-            reader.close()
-        }
-    }
-}
+//                     dut.clockDomain.waitRisingEdge()
+//                 }
+//             }
+//             reader.close()
+//         }
+//     }
+// }
