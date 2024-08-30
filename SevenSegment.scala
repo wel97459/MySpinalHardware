@@ -33,7 +33,7 @@ class SevenSegmentDriver(val NumberOfDisplays: BigInt = 1, val CycleSpeed: BigIn
     val timer = Timeout(CycleSpeed)
     val displayCounter = Counter(0, 1 + (NumberOfDisplays << 1))
 
-    val digits = Vec(Reg(Bits(4 bit)), NumberOfDisplays.toInt + 1)
+    val digits = Vec(Reg(Bits(4 bit)) init(0), NumberOfDisplays.toInt + 1)
 
     val digit = Bits(4 bit)
 
@@ -66,7 +66,7 @@ class SevenSegmentDriver(val NumberOfDisplays: BigInt = 1, val CycleSpeed: BigIn
     }
 
     when(!displayCounter(0)){
-        displays := B"1" << (displayCounter >> 1)
+        displays := (B"1" << (displayCounter >> 1)).resized
         segments := Cat(dp, digit2segments(digit.asUInt))
     } otherwise {
         displays := 0
@@ -145,7 +145,6 @@ class SevenSegmentDriverTest extends Component {
     }
     when(io.c === 10){
         ssd.setDecPoint(1)
-        ssd.setDigits(0, 255)
         ssd.setDigit(2, 5)
         ssd.setDigit(3, 8)
     }
