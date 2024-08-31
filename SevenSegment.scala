@@ -80,11 +80,11 @@ class SevenSegmentDriver(val NumberOfDisplays: BigInt = 1, val CycleSpeed: BigIn
 
     def retset(): Unit = {digits.map(_ := 0)}
 
-    def setDigit(digit: Int, number: UInt): Unit = {
-        digits(digit) := number.asBits.resize(4)
+    def setDigit(digit: Int, number: Bits): Unit = {
+        digits(digit) := number.resize(4)
     }
 
-    def setDigits(digit: Int, number: UInt): Unit = {
+    def setDigits(digit: Int, number: Bits): Unit = {
         setDigit(digit, number & 0x0F)
         setDigit(digit+1, (number & 0xF0) >> 4)
     }

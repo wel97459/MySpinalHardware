@@ -1,6 +1,7 @@
 package MySpinalHardware
 
 import spinal.core._
+import spinal.lib._
 import spinal.core.sim._
 
 import scala.util.control.Breaks
@@ -37,6 +38,30 @@ class Keypad extends Component {
     }otherwise(io.KeyOut := False)
 }
 
+class KeypadScanner(val ColDepth: Int = 4, val RowDepth: Int = 4, val CycleSpeed: BigInt = 10) extends Component {
+    val io = new Bundle {
+        val KeypadCol = in Bits (ColDepth bits)
+        val KeypadRow = out Bits (RowDepth bits)
+        val KeysOut = out Bits(ColDepth * RowDepth bits)
+    }
+
+    val timer = Timeout(CycleSpeed)
+    val rowCounter = Counter(0, RowDepth-1)
+
+    val columns = Vec(Reg(Bits(ColDepth bit)) init(0), RowDepth.toInt)
+    val col = RegNext(io.KeypadCol) init(0)
+
+    io.KeypadRow := (B"1" << rowCounter).resized
+
+    when(timer) {
+        timer.clear()
+        rowCounter.increment()
+        columns(rowCounter.resized) := col
+    }
+
+    io.KeysOut := Cat(columns)
+}
+
 object Keypad_Test {
     def main(args: Array[String]) {
         SimConfig.withWave.compile{
@@ -67,6 +92,40 @@ object Keypad_Test {
 
                     c+=1
                     if(c == 50) loop.break()
+                    dut.clockDomain.waitRisingEdge()
+                }
+            }
+        }
+    }
+}
+
+object KeypadScanner_Test {
+    def main(args: Array[String]) {
+        SimConfig.withWave.compile{
+            val dut = new KeypadScanner()
+            dut
+        }.doSim { dut =>
+            //Fork a process to generate the reset and the clock on the dut
+            dut.clockDomain.forkStimulus(period = 10)
+
+            dut.io.KeypadCol #= 0x0
+            dut.clockDomain.waitRisingEdge()
+
+            var c = 0;
+
+            val loop = new Breaks;
+            loop.breakable {
+                while (true) {
+                    if(dut.io.KeypadRow.toInt == 0x2){
+                        dut.io.KeypadCol #= 0x8
+                    }else if(dut.io.KeypadRow.toInt == 0x4){
+                        dut.io.KeypadCol #= 0x8
+                    }else{
+                        dut.io.KeypadCol #= 0x0
+                    }
+
+                    c+=1
+                    if(c == 500) loop.break()
                     dut.clockDomain.waitRisingEdge()
                 }
             }
