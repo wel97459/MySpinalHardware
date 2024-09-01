@@ -62,6 +62,42 @@ class KeypadScanner(val ColDepth: Int = 4, val RowDepth: Int = 4, val CycleSpeed
     io.KeysOut := Cat(columns)
 }
 
+class KeypadHexDecoder() extends Component{
+    val io = new Bundle {
+        val KeysIn = in Bits(16 bits)
+        val HexOut = out Bits(4 bits)
+        val HexOutLast = out Bits(4 bits)
+        val Valid = out Bool()
+    }
+
+    val bitCounter = Counter(16)
+    bitCounter.increment()
+    io.Valid := False
+
+    val hexOut = RegNextWhen(bitCounter.value.asBits, io.Valid) init(0)
+    val hexOutLast = RegNextWhen(hexOut, io.Valid) init(0)
+    val currentKeys = RegNextWhen(io.KeysIn, bitCounter.willOverflow)
+    val scan = currentKeys(bitCounter)
+    val found = Reg(Bool()) init(False)
+    val keyHeld = Reg(Bool()) init(False)
+
+    io.HexOut := hexOut
+    io.HexOutLast := hexOutLast
+
+    when(bitCounter.willOverflow){
+        when(keyHeld && io.KeysIn === 0){
+            keyHeld := False
+        }
+    }
+
+    when(scan){
+        when(!keyHeld){
+            io.Valid := True
+            keyHeld := True
+        }
+    }
+}
+
 object Keypad_Test {
     def main(args: Array[String]) {
         SimConfig.withWave.compile{
@@ -124,6 +160,39 @@ object KeypadScanner_Test {
                         dut.io.KeypadCol #= 0x0
                     }
 
+                    c+=1
+                    if(c == 500) loop.break()
+                    dut.clockDomain.waitRisingEdge()
+                }
+            }
+        }
+    }
+}
+
+object KeypadDecoder_Test {
+    def main(args: Array[String]) {
+        SimConfig.withWave.compile{
+            val dut = new KeypadHexDecoder()
+            dut
+        }.doSim { dut =>
+            //Fork a process to generate the reset and the clock on the dut
+            dut.clockDomain.forkStimulus(period = 10)
+
+            dut.io.KeysIn #= 0x0000
+            dut.clockDomain.waitRisingEdge()
+
+            var c = 0;
+
+            val loop = new Breaks;
+            loop.breakable {
+                while (true) {
+                    if(c>=100 && c < 200){
+                        dut.io.KeysIn #= 0x0010
+                    }else if(c>=200 && c < 300) {
+                        dut.io.KeysIn #= 0x0000
+                    }else if(c>=300 && c < 500) {
+                        dut.io.KeysIn #= 0x8000
+                    }
                     c+=1
                     if(c == 500) loop.break()
                     dut.clockDomain.waitRisingEdge()
