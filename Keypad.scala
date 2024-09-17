@@ -68,6 +68,7 @@ class KeypadHexDecoder() extends Component{
         val HexOut = out Bits(4 bits)
         val HexOutLast = out Bits(4 bits)
         val Valid = out Bool()
+        val KeyHeld = out Bool()
     }
 
     val bitCounter = Counter(16)
@@ -83,6 +84,7 @@ class KeypadHexDecoder() extends Component{
 
     io.HexOut := hexOut
     io.HexOutLast := hexOutLast
+    io.KeyHeld := keyHeld
 
     when(bitCounter.willOverflow){
         when(keyHeld && io.KeysIn === 0){
