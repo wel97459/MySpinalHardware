@@ -45,7 +45,7 @@ class ProgrammingInterface(Baud: BigInt) extends Component {
 
 /***-Defines-***/    
 
-    val StartMSGList = "ProgrammingInterface 1.0\r\n\r\n\0Ok.\r\n\0".toList
+    val StartMSGList = "ProgrammingInterface 1.0\r\n\r\n\u0000Ok.\r\n\u0000".toList
     val StartMSG_Rom = Mem(UInt(8 bits), StartMSGList.map(U(_, 8 bits)))
 
 /***-Registers-***/

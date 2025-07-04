@@ -20,7 +20,7 @@ import scala.util.control.Breaks
 
 object SevenSegmentDriver {
     def apply(NumberOfDisplays: BigInt, CycleSpeed: BigInt) : SevenSegmentDriver = new SevenSegmentDriver(NumberOfDisplays, CycleSpeed)
-    def apply(NumberOfDisplays: BigInt, time: TimeNumber) : SevenSegmentDriver = new SevenSegmentDriver(NumberOfDisplays, (time*ClockDomain.current.frequency.getValue).toBigInt())
+    def apply(NumberOfDisplays: BigInt, time: TimeNumber) : SevenSegmentDriver = new SevenSegmentDriver(NumberOfDisplays, ((time.toBigDecimal * ClockDomain.current.frequency.getValue.toBigDecimal).setScale(0, BigDecimal.RoundingMode.UP)).toBigInt)
 }
 
 class SevenSegmentDriver(val NumberOfDisplays: BigInt = 1, val CycleSpeed: BigInt = 1) extends ImplicitArea[Bits] { // extends Component {

@@ -5,7 +5,7 @@ import spinal.lib.Timeout
 
 object Debounce {
     def apply(depth: Int, cycles: BigInt) : Debounce = new Debounce(depth, cycles)
-    def apply(depth: Int, time: TimeNumber) : Debounce = new Debounce(depth, (time * ClockDomain.current.frequency.getValue).toBigInt())
+    def apply(depth: Int, time: TimeNumber) : Debounce = new Debounce(depth, ((time.toBigDecimal * ClockDomain.current.frequency.getValue.toBigDecimal).setScale(0, BigDecimal.RoundingMode.UP)).toBigInt)
     def apply(depth: Int, frequency: HertzNumber) : Debounce = Debounce(depth, frequency.toTime)
 }
 
