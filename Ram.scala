@@ -39,13 +39,13 @@ class RamInit(File: String, AddrDepth: Int = 8) extends Component {
     )
 }
 
-class Ram(AddrDepth: Int = 8) extends Component {
+class Ram(AddrDepth: Int = 8, DataDepth: Int = 8) extends Component {
     val io = new Bundle {
         val ena     = in  Bool()
         val wea     = in  Bool()
         val addra   = in Bits(AddrDepth bit)
-        val douta   = out Bits(8 bit)
-        val dina    = in Bits(8 bit)
+        val douta   = out Bits(DataDepth bit)
+        val dina    = in Bits(DataDepth bit)
     }
 
     def MemRom(Depth: Int) = new Mem(Bits(8 bit), max_bits(Depth))
