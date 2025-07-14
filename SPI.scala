@@ -7,7 +7,7 @@ import spinal.lib.fsm._
 import spinal.core.sim._
 import scala.util.control.Breaks
 
-class mySPI extends Component{
+class MasterSPI extends Component{
     val io = new Bundle
     {
         val output = slave Stream(Bits(9 bits))
@@ -129,11 +129,114 @@ class mySPI extends Component{
     }
 }
 
+case class SlaveSPI() extends Component{
+    val io = new Bundle{
+        val output = master Stream(Bits(9 bits))
+        val output_full = out Bool()
+        val input = slave Stream(Bits(8 bits))
+        val input_full = out Bool()
 
-object SPI_Test {
+        val spi = new Bundle
+        {
+            val sck = in Bool()
+            val ss = in Bool()
+            val mosi = in Bool()
+            val miso = out Bool()
+        }
+    }
+
+/***-Defines-***/    
+
+/***-Registers-***/
+    val sck = RegNext(RegNext(io.spi.sck))
+    val ss = RegNext(RegNext(io.spi.ss))
+    val mosi = RegNext(RegNext(io.spi.mosi))
+
+    val dataIn = Reg(Bits(8 bits)) init(0)
+    val dataOut = Reg(Bits(8 bits)) init(0)
+    val instruction = Reg(Bool()) init(False)
+
+    val bitCounter = Counter(8)
+/***-Wires-***/
+
+/***-Streams-***/
+    val spi_data_out = Stream(Bits(9 bits))
+    val outFIFO = StreamFifo(
+        dataType = Bits(9 bits),
+        depth    = 16
+    )
+    outFIFO.io.push << spi_data_out
+
+    val spi_data_in = Stream(Bits(8 bits))
+    val inFIFO = StreamFifo(
+        dataType = Bits(8 bits),
+        depth    = 16
+    )
+    inFIFO.io.pop >> spi_data_in
+
+    spi_data_out.valid := False
+    spi_data_in.ready := False
+/***-Blocks-***/
+
+/***-Routing-***/
+
+/***-LutChains-***/
+    val dataIn_next = mosi ## dataIn(7 downto 1) 
+    val dataOut_next = dataIn(6 downto 0) ## B"0"
+
+/***-IO stuff-***/
+    spi_data_out.payload := !instruction ## dataIn
+
+    io.output_full := outFIFO.io.availability < 2
+    io.input_full := inFIFO.io.availability < 2
+
+    outFIFO.io.pop >> io.output
+    inFIFO.io.push << io.input
+
+    io.spi.miso := False //dataOut(7)
+
+/***-Logic-***/
+
+    val fsm = new StateMachine {
+        val Init: State = new State with EntryPoint {
+            whenIsActive {
+                goto(WaitForCS)
+            }
+        }
+
+        val WaitForCS: State = new State {
+            whenIsActive {
+                when(ss.fall()){
+                    instruction := False
+                    bitCounter.clear()
+                    goto(shiftIn)
+                }
+            }
+        }
+
+        val shiftIn: State = new State {
+            whenIsActive {
+                when(ss){
+                    goto(WaitForCS)
+                }elsewhen(sck.rise()){
+                    bitCounter.increment()
+                }elsewhen(sck.fall()){
+                    dataIn := dataIn_next
+                    when(bitCounter.willOverflowIfInc){
+                        instruction := True
+                        spi_data_out.valid := True
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+object MasterSPI_Test {
     def main(args: Array[String]) {
         SimConfig.withWave.compile{
-            val dut = new mySPI()
+            val dut = new MasterSPI()
             dut
         }.doSim { dut =>
             //Fork a process to generate the reset and the clock on the dut
@@ -169,6 +272,45 @@ object SPI_Test {
                     if(c == 50) loop.break()
                     c+=1
                     dut.clockDomain.waitRisingEdge()
+                }
+            }
+        }
+    }
+}
+
+
+object SlaveSPI_Test extends App {
+    Config.sim.compile(SlaveSPI()).doSim { dut =>
+        //Fork a process to generate the reset and the clock on the dut
+        dut.clockDomain.forkStimulus(period = 83)
+        var c = 0;
+        var cc = 0;
+        val b = 0x30;
+        val loop = new Breaks;
+        dut.io.spi.ss #= true
+        loop.breakable {
+            while (true) {
+                dut.clockDomain.waitRisingEdge()
+                if(c > 50){
+                    dut.io.spi.ss #= false
+                }
+                if( c % 2 == 0 && c > 100){
+                    dut.io.spi.sck #= true
+                }else{
+                    dut.io.spi.sck #= false
+                }
+                if( c % 2 == 0 && c > 100){
+
+                    dut.io.spi.mosi #= ((b << cc) & 0x80) == 0x80
+                    if(cc >= 7){
+                        cc=0;
+                    }else{
+                        cc+=1;
+                    }
+                }
+                c += 1
+                if(c > 65536){
+                    loop.break;
                 }
             }
         }

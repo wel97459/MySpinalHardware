@@ -28,7 +28,7 @@ class SPI_Flash extends Component{
         }
     }
     
-    val spi = new mySPI()
+    val spi = new MasterSPI()
     spi.io.SPI <> io.SPI
 
     io.output <> spi.io.input
