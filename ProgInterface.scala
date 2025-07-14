@@ -29,6 +29,7 @@ class ProgrammingInterface(Baud: BigInt) extends Component {
     val io = new Bundle
     {
         val keys = master Stream (Bits(8 bit))
+        
         val RamInterface = new Bundle
         {
             val Address = out Bits(16 bit)
@@ -160,14 +161,11 @@ class ProgrammingInterface(Baud: BigInt) extends Component {
         val lastState = Reg(this.enumDef())
 
         /***-FMS-***/
-        val Reset: State = new StateDelay(10) with EntryPoint {
+        val Reset: State = new State with EntryPoint {
             whenIsActive {
                 StartMSGPointer.clear()
-                uartReset := False
+                uartReset := True
                 lastState := enumOf(Reset)
-            }
-
-            whenCompleted {
                 goto(SendStartMsg)
             }
         }
