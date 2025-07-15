@@ -135,7 +135,7 @@ case class SlaveSPI() extends Component{
         val output_full = out Bool()
         val input = slave Stream(Bits(8 bits))
         val input_full = out Bool()
-
+        val instruction = out Bool()
         val spi = new Bundle
         {
             val sck = in Bool()
@@ -181,11 +181,11 @@ case class SlaveSPI() extends Component{
 /***-Routing-***/
 
 /***-LutChains-***/
-    val dataIn_next = mosi ## dataIn(7 downto 1) 
-    val dataOut_next = dataIn(6 downto 0) ## B"0"
+    val dataIn_next = dataIn(6 downto 0) ## mosi
+    val dataOut_next = B"0" ## dataIn(7 downto 1) 
 
 /***-IO stuff-***/
-    spi_data_out.payload := !instruction ## dataIn
+    spi_data_out.payload := !instruction ## dataIn_next
 
     io.output_full := outFIFO.io.availability < 2
     io.input_full := inFIFO.io.availability < 2
@@ -194,6 +194,7 @@ case class SlaveSPI() extends Component{
     inFIFO.io.push << io.input
 
     io.spi.miso := False //dataOut(7)
+    io.instruction := instruction
 
 /***-Logic-***/
 
@@ -218,9 +219,9 @@ case class SlaveSPI() extends Component{
             whenIsActive {
                 when(ss){
                     goto(WaitForCS)
-                }elsewhen(sck.rise()){
-                    bitCounter.increment()
                 }elsewhen(sck.fall()){
+                    bitCounter.increment()
+                }elsewhen(sck.rise()){
                     dataIn := dataIn_next
                     when(bitCounter.willOverflowIfInc){
                         instruction := True
@@ -294,12 +295,12 @@ object SlaveSPI_Test extends App {
                 if(c > 50){
                     dut.io.spi.ss #= false
                 }
-                if( c % 2 == 0 && c > 100){
+                if( c % 4 >= 2 && c > 100){
                     dut.io.spi.sck #= true
                 }else{
                     dut.io.spi.sck #= false
                 }
-                if( c % 2 == 0 && c > 100){
+                if( c % 4 == 2 && c > 100){
 
                     dut.io.spi.mosi #= ((b << cc) & 0x80) == 0x80
                     if(cc >= 7){
