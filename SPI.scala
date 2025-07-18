@@ -163,7 +163,7 @@ case class SlaveSPI() extends Component{
     val spi_data_out = Stream(Bits(9 bits))
     val outFIFO = StreamFifo(
         dataType = Bits(9 bits),
-        depth    = 16
+        depth    = 32
     )
     outFIFO.io.push << spi_data_out
 
