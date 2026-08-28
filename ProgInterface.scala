@@ -7,6 +7,7 @@ import spinal.lib.fsm._
 
 import java.rmi.registry.Registry
 import scala.util.control.Breaks
+
 class BaudRateGen(Baud: BigInt) extends Component {
   val io = new Bundle {
     val tick = out Bool ()
@@ -25,6 +26,7 @@ class BaudRateGen(Baud: BigInt) extends Component {
   io.tick := tick
 
 }
+
 class ProgrammingInterface(Baud: BigInt) extends Component {
   val io = new Bundle {
     val keys = master Stream (Bits(8 bit))
@@ -194,14 +196,11 @@ class ProgrammingInterface(Baud: BigInt) extends Component {
 
     /** *-FMS-**
       */
-    val Reset: State = new StateDelay(10) with EntryPoint {
+    val Reset: State = new State with EntryPoint {
       whenIsActive {
         StartMSGPointer.clear()
-        uartReset := False
+        uartReset := True
         lastState := enumOf(Reset)
-      }
-
-      whenCompleted {
         goto(SendStartMsg)
       }
     }
@@ -223,225 +222,10 @@ class ProgrammingInterface(Baud: BigInt) extends Component {
       }
     }
 
-
-/***-Logic-***/   
-
-    val InterfaceFMS = new StateMachine {
-        /***-Registers-***/
-        val StartMSGPointer = CounterSet(StartMSGList.length)
-        val StartMSGChar = StartMSG_Rom(StartMSGPointer)
-        val lastState = Reg(this.enumDef())
-
-        /***-FMS-***/
-        val Reset: State = new State with EntryPoint {
-            whenIsActive {
-                StartMSGPointer.clear()
-                uartReset := True
-                lastState := enumOf(Reset)
-                goto(SendStartMsg)
-            }
-        }
-
-        val SendStartMsg: State = new  State {
-            whenIsActive{
-                lastState := enumOf(SendStartMsg)
-                uart_tx.io.data_in := StartMSGChar.asBits
-                when(StartMSGChar =/= 0) {
-                    when(!uart_tx.io.buffer_full){
-                        StartMSGPointer.increment()
-                        uart_tx.io.buffer_write := True
-                        goto(CheckTX_FIFO)
-                    }
-                }otherwise{
-                    StartMSGPointer.clear()
-                    goto(Waiting)
-                }
-            }
-        }
-
-        val CheckTX_FIFO: State = new  State {
-            whenIsActive{
-                when(!uart_tx.io.buffer_full) {
-                    stateNext := lastState
-                }
-            }
-        }
-
-        val Waiting: State = new State {
-            whenIsActive {
-                lastState := enumOf(Waiting)
-                when(uart_rx.io.buffer_data_present){
-                    uart_rx.io.buffer_read := True
-                    workingReg := 0;
-                    when(dataInt === '?'){
-                        goto(SendStartMsg)
-                    }elsewhen(dataInt === 'a'){
-                        amount.setValue(4)
-                        goto(SetAddress)   
-                    }elsewhen(dataInt === 'f'){
-                        amount.setValue(2)
-                        goto(SetFlag)   
-                    }elsewhen(dataInt === 'g'){
-                        byte2HexSelect := True
-                        amount.setValue(2)
-                        goto(GetFlag)   
-                    }elsewhen(dataInt === 'w'){
-                        amount.setValue(2)
-                        goto(WriteByte)   
-                    }elsewhen(dataInt === 'r'){
-                        byte2HexSelect := False
-                        amount.setValue(2)
-                        goto(ReadByte)   
-                    }elsewhen(dataInt === '`'){
-                        amount.setValue(1)
-                        goto(WriteBytes)   
-                    }elsewhen(dataInt === 't'){
-                        amount.setValue(1)
-                        goto(TypeByte)   
-                    }
-                }
-            }
-        }
-
-        val SetAddress: State = new State {
-            whenIsActive {
-                when(uart_rx.io.buffer_data_present || amount === 0){                    
-                    when(amount >= 1){
-                        uart_rx.io.buffer_read := True
-                        shiftWorkingReg := True
-                        amount.decrement()
-                    }otherwise{
-                        address := workingReg.asUInt
-                        StartMSGPointer.setValue(29) //Ok.
-                        goto(SendStartMsg)
-                    }
-                }
-            }
-        }
-
-        val SetFlag: State = new State {
-            whenIsActive {
-                when(uart_rx.io.buffer_data_present || amount === 0){                    
-                    when(amount >= 1){
-                        uart_rx.io.buffer_read := True
-                        shiftWorkingReg := True
-                        amount.decrement()
-                    }otherwise{
-                        flag := workingReg.resize(8)
-                        StartMSGPointer.setValue(29) //Ok.
-                        goto(SendStartMsg)
-                    }
-                }
-            }
-        }
- 
-        val GetFlag: State = new State {
-            whenIsActive {
-                lastState := enumOf(GetFlag)
-                when(!uart_tx.io.buffer_half_full || amount === 0){                    
-                    when(amount >= 1){
-                        uart_tx.io.buffer_write := True
-                        when(amount === 2){
-                            uart_tx.io.data_in := byteUpperHex.asBits
-                        }otherwise{
-                            uart_tx.io.data_in := byteLowerHex.asBits
-                        }
-                        amount.decrement()
-                        goto(CheckTX_FIFO)
-                    }otherwise{
-                        StartMSGPointer.setValue(32) //NewLine
-                        goto(SendStartMsg)
-                    }
-                }
-            }
-        }
-
-        val WriteByte: State = new State {
-            whenIsActive {
-                when(uart_rx.io.buffer_data_present || amount === 0){                    
-                    when(amount >= 1){
-                        uart_rx.io.buffer_read := True
-                        shiftWorkingReg := True
-                        amount.decrement()
-                    }otherwise{
-                        ramDataSel := True
-                        ramWrite := True
-                        addressAdd := True
-                        StartMSGPointer.setValue(29) //Ok.
-                        goto(SendStartMsg)
-                    }
-                }
-            }
-        }
-
-        val ReadByte: State = new State {
-            whenIsActive {
-                lastState := enumOf(ReadByte)
-                when(!uart_tx.io.buffer_half_full || amount === 0){                    
-                    when(amount >= 1){
-                        uart_tx.io.buffer_write := True
-                        when(amount === 2){
-                            uart_tx.io.data_in := byteUpperHex.asBits
-                        }otherwise{
-                            uart_tx.io.data_in := byteLowerHex.asBits
-                        }
-                        amount.decrement()
-                        goto(CheckTX_FIFO)
-                    }otherwise{
-                        addressAdd := True
-                        StartMSGPointer.setValue(32) //NewLine
-                        goto(SendStartMsg)
-                    }
-                }
-            }
-        }
-
-        val WriteBytes: State = new State {
-            whenIsActive {
-                when(uart_rx.io.buffer_data_present){
-                    when(amount === 0){
-                        amount.setValue(workingReg.resize(8).asUInt)
-                        goto(WriteBytesExec)
-                    }otherwise{
-                        latchWorkingReg := True
-                        uart_rx.io.buffer_read := True
-                        amount.decrement()
-                    }
-                }
-            }
-        }
-
-        val WriteBytesExec: State = new State {
-            whenIsActive {
-                when(uart_rx.io.buffer_data_present || amount === 0){                 
-                    when(amount === 0){
-                        StartMSGPointer.setValue(29) //Ok.
-                        goto(SendStartMsg)
-                    }otherwise{
-                        ramWrite := True
-                        uart_rx.io.buffer_read := True
-                        addressAdd := True
-                        amount.decrement()
-                    }
-                }
-            }
-        }
-        val TypeByte: State = new State {
-            whenIsActive {
-                when(uart_rx.io.buffer_data_present || amount === 0){                    
-                    when(amount === 0){
-                        when(keyIn.ready){
-                            keyIn.valid := True
-                            StartMSGPointer.setValue(29) //Ok.
-                            goto(SendStartMsg)
-                        }
-                    }otherwise{
-                        latchWorkingReg := True
-                        uart_rx.io.buffer_read := True
-                        amount.decrement()
-                    }
-                }
-            }
+    val CheckTX_FIFO: State = new State {
+      whenIsActive {
+        when(!uart_tx.io.buffer_full) {
+          stateNext := lastState
         }
       }
     }
@@ -613,6 +397,7 @@ class ProgrammingInterface(Baud: BigInt) extends Component {
         }
       }
     }
+
     val TypeByte: State = new State {
       whenIsActive {
         when(uart_rx.io.buffer_data_present || amount === 0) {
@@ -630,6 +415,7 @@ class ProgrammingInterface(Baud: BigInt) extends Component {
         }
       }
     }
+
     val FloppySeek: State = new State {
       whenIsActive {
         when(amount === 0) {
