@@ -261,15 +261,22 @@ class ProgrammingInterface(Baud: BigInt) extends Component {
           } elsewhen (dataInt === 't') {
             amount.setValue(1)
             goto(TypeByte)
+          } elsewhen (dataInt === '>') {
+            amount.setValue(128)
+            goto(FloppyRead)
+          } elsewhen (dataInt === '<') {
+            amount.setValue(128)
+            goto(FloppyWrite)
           }
         } elsewhen (io.Floppy.SeekReq.rise()) {
           amount.setValue(4)
           goto(FloppySeek)
         } elsewhen (io.Floppy.ReadReq.rise()) {
-          goto(FloppyRead)
-          // } elsewhen (io.Floppy.WriteReq.rise()) {
-          //   amount.setValue(127)
-          //   goto(FloppyWrite)
+          uart_tx.io.buffer_write := True
+          uart_tx.io.data_in := '>'
+        } elsewhen (io.Floppy.WriteReq.rise()) {
+          uart_tx.io.buffer_write := True
+          uart_tx.io.data_in := '<'
         }
       }
     }
@@ -447,6 +454,21 @@ class ProgrammingInterface(Baud: BigInt) extends Component {
             amount.decrement()
           }
         }
+      }
+    }
+
+    val FloppyWrite: State = new State {
+      whenIsActive {
+        // when(uart_rx.io.buffer_data_present || amount === 0) {
+        //   when(amount === 0) {
+        //     goto(Waiting)
+        //   } otherwise {
+        //     FDC_in.valid := True
+        //     uart_rx.io.buffer_read := True
+        //     amount.decrement()
+        //   }
+        // }
+        goto(Waiting)
       }
     }
   }
